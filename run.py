@@ -16,7 +16,7 @@ from pymodbus.utilities import computeCRC
 from pymodbus.constants import Endian
 import webbrowser
 import subprocess
-from pattern import starter,fail, success, partialFail, allPassed
+from pattern import starter,fail, success, p1Fail, p2Fail, allPassed, p1Passed, p2Passed
 import serial
 import time,datetime
 from ip_tracker import targetIp
@@ -204,7 +204,7 @@ async def AsyncModbusCheckReadRegisters(acuClass,readAddress = 27136):
     return RR.registers[-1]
 
 #########################################
-# purpose: Check ip address of the meter
+# purpose: store ip address of the meter
 async def asyncModbusCheckIp(acuClass, client):
     rr = await asyncReadRegisters(client,259,2)
     ip = ''
@@ -243,8 +243,8 @@ def modbusCheckIp(client):
 # Purpose:
 # recommended asynchronous connection through modbus rtu, avoid threads racing and lead to connection failure. 
 async def asyncConnectIp(acuClass):
-  client = AsyncModbusSerialClient (method='rtu', port=acuClass.COM, baudrate=acuClass.BR, parity='N', 
-                            stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
+  client = AsyncModbusSerialClient (method='rtu', port=acuClass.COM, baudrate=acuClass.BR,\
+    parity='N',stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   try:
     await client.connect()
     acuClass.plug.loading_animation(25)
@@ -260,17 +260,18 @@ async def asyncConnectIp(acuClass):
   
 
 ################################################################################
-# Purpose: Modify IP address when DHCP disabled /preset address: 192.168.63.202/or 63.201
+# Purpose: Modify IP address and disabled DHCP  /preset address: 192.168.63.202/or 63.201
 # * subject to change if 
 async def AsyncManualIpWrite(acuClass,Address=259,Value=[49320,16330]):
-  logger.info('{} Manual DHCP WEB 2 Test in process.....'.format(acuClass.serialNum))
+  logger.info('{} Manual DHCP Test in process.....'.format(acuClass.serialNum))
   await asyncConnectWrite(acuClass, 258, [0],'Disabling DHCP....') #set to DHCP Disabled
   await asyncio.sleep(5)
   if(acuClass.processNum ==1):
     await asyncConnectWrite(acuClass, Address, Value)
   elif(acuClass.processNum == 2):
     await asyncConnectWrite(acuClass, Address, [49320,16329]) #192.168.63.201
-  await asyncio.sleep(8)
+  await acuClass.plug.powerCycleSlow()
+  await asyncConnectIp(acuClass)
   #REQUIRE POWERCYCLE
 
 ################################################################################
@@ -303,30 +304,38 @@ async def AsyncManualEnergyWriteLegacy(acuClass):
   #await asyncConnectWrite(Baudrate,Port,8328,[10,20497,0,23390,0,10333,8,28337,0,0,0,0,0,0,0,0,0,340,0,0,0,0,0,0,5,16296,0,0,5,12897,5,12897,14,45059,0,48296,0,17519,10,1549])
   #await asyncio.sleep(60) #wait until context is stored
 
+async def asyncDHCPEnablePowerCycle(acuClass):
+  await asyncConnectWrite(acuClass, 258, [1],'{} DHCP enabled'.format(acuClass.serialNum)) #Enabled DHCP 
+  await acuClass.plug.powerCycleSlow()
+  await asyncConnectIp(acuClass)
+
+
 # Purpose: Enable DHCP
 async def asyncDHCPEnable(acuClass):
   await asyncConnectWrite(acuClass, 258, [1],'{} DHCP enabled'.format(acuClass.serialNum)) #Enabled DHCP 
-  #REQUIRE POWERCYCLE
-
-# Purpose: Disable DHCP
-async def asyncDhcpDisable(Baudrate,Port):
-  await asyncio.sleep(5)
-  await asyncConnectWrite(Baudrate, Port, 258, [0],'Disabling DHCP') #Disabled DHCP 
-  await asyncio.sleep(5)
+  
   #REQUIRE POWERCYCLE
 
 # Purpose: Change Baudrate for channel 2
 async def asyncChangeBaudrate2(acuClass,newBaudrate):
-  await asyncio.sleep(5)
+  await asyncio.sleep(8)
   await asyncConnectWrite(acuClass, 4143, [newBaudrate],'Changing baud rate on channel 2...')
-  await asyncio.sleep(5)
+  await asyncio.sleep(8)
   #REQUIRE POWERCYCLE
 
 # Purpose: Change protocol for channel 2
-async def asyncChangeProtocol2(acuClass, Mode=None):
+async def asyncChangeProtocol2(acuClass, Mode=None, lock = None):
   await asyncio.sleep(5)
   if(Mode=='OTHER'):
     await asyncConnectWrite(acuClass, 4152, [0], '{} Changing channel 2 to Other'.format(acuClass.serialNum))
+    await asyncChangeBaudrate2(acuClass,38400)
+    await AsyncManualIpWrite(acuClass)
+    sleep(15)
+    openBrowser(acuClass, lock)
+    await asyncDHCPEnablePowerCycle(acuClass)
+    sleep(15)
+    openBrowser(acuClass, lock)
+
   elif(Mode =='PROFIBUS'):
     MeterType = await meterModelScan(acuClass)
     if(MeterType != 'E'):
@@ -338,6 +347,7 @@ async def asyncChangeProtocol2(acuClass, Mode=None):
                             .format(acuClass.serialNum))
   else:
     await asyncConnectWrite(acuClass, 4152, [4], 'Changing channel 2 to Web 2')
+    asyncio.run(asyncChangeBaudrate2(acuClass,11520))
   #REQUIRE POWERCYCLE
 
 ## If possible, create an async version to prevent racing condition
@@ -365,6 +375,13 @@ def syncChangeBaudRate(acuClass):
   
   # asyncFlagChecking: it will check the latency register 
   # Increment fail count if latency greater than 160, only trigger alert if greater than 140 
+  
+async def asyncFlagTest(acuClass):
+  await asyncFlagChecking(acuClass,True)
+  syncChangeBaudRate(acuClass)
+  await asyncFlagChecking(acuClass,False)
+  await AsyncModbusCheckReadRegisters
+  
 async def asyncFlagChecking(acuClass, resetEnable: bool):
 
   client = AsyncModbusSerialClient(method='rtu', port=acuClass.COM, baudrate=acuClass.BR, parity='N', 
@@ -487,7 +504,8 @@ async def checkEnergy(acuClass,Address, Size):
  
 # New test should refer to checkEnergy function
 async def checkEnergyLegacy(acuClass):  
-  client = AsyncModbusSerialClient(method='rtu', port=acuClass.COM, baudrate=acuClass.BR, parity='N', 
+  client = AsyncModbusSerialClient(method='rtu', port=acuClass.COM, \
+                          baudrate=acuClass.BR, parity='N', 
                           stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   await client.connect()
   RR = await asyncReadRegisters(client,16456,18)
@@ -503,11 +521,13 @@ async def checkEnergyLegacy(acuClass):
 ##########################################
 # Purpose: Async Connect and write to register
 # recommended asynchronous connect and write through modbus rtu
-async def asyncConnectWrite(acuClass, Address: int, Value: list, prompt:str=None):
+async def asyncConnectWrite(acuClass, Address: int,\
+  Value: list, prompt:str=None):
   if(prompt):
     logger.info(prompt)
-  client = AsyncModbusSerialClient (method='rtu', port= acuClass.COM, baudrate=acuClass.BR, parity='N', 
-                            stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
+  client = AsyncModbusSerialClient (method='rtu', \
+    port= acuClass.COM, baudrate=acuClass.BR, parity='N', 
+    stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   try:
     await client.connect()
     logger.debug('Async Connection Status: {}'.format(client.connected))
@@ -538,20 +558,22 @@ async def asyncModbusWriteRegisters(client, Address, Value: list):
 # pingTest:
 # This module will ping the ip address three times. If error, prompt Error, otherwise, active
 def pingTest(acuClass,open_browser=False):
-  logger.info("{} Ping Test in progress...".format(acuClass.serialNum))
+  logger.info("{} Ping Test in process...".format(acuClass.serialNum))
 
   try:
       # Use subprocess to run the ping command
-      result = subprocess.run(['ping', '-n', '5', acuClass.address], capture_output=True, text=True, timeout=5)
+      result = subprocess.run(['ping', '-n', '5', acuClass.address], \
+        capture_output=True, text=True, timeout=5)
       if result.returncode == 0:
           ping_status = "Network Active"
           if open_browser:
               webbrowser.open(acuClass.address)
-              sleep(10)
+              sleep(15)
               result = subprocess.run("taskkill /f /im msedge.exe"\
                                       , stdout=subprocess.PIPE, stderr=subprocess.PIPE)
       else:
-          ping_status = "{} Ping Test Failed, unable to communicate".format(acuClass.serialNum)
+          ping_status = "{} Ping Test Failed, unable to communicate"\
+            .format(acuClass.serialNum)
   except subprocess.TimeoutExpired:
       ping_status = "{} Ping Test Timed Out".format(acuClass.serialNum)
       acuClass.failCount += 1
@@ -884,100 +906,38 @@ class TestRunner:
     self.address = None
   
   # Purpose: generate a log file for each testing meter
-  def wrapper(self):
+  def wrapper(self,name=None):
     self.pid = os.getpid()
     try:
       SerialId = asyncio.run(AsyncReadSerialId(self, 1))
     except asyncio.exceptions.CancelledError:
       SerialId = 'acuTestlog'
-    logFileName = SerialId+'.log'
+    if(name):
+      logFileName = SerialId+name+'.log'
+    else:
+      logFileName = SerialId+'.log'
     self.logFile = logging.FileHandler(logFileName,mode='w')
     self.logFile.setLevel(logging.DEBUG)
     logger.addHandler(self.logFile)
     self.serialNum = asyncio.run(AsyncReadSerialId(self,1))
-    self.address = '192.168.60.13'
-  # main test framework, subject to add new tests/parameters
-  # Inputs: shared_failCount -> global variable, need to acquire permit by calling share_failCount.get_lock()
-  def run_tests(self, shared_failCount, lock, OpenYabeLock):
-    self.wrapper()
+
+  # Frame for Web WebPush Test
+  def run_webpush(self,shared_failCount,lock,OpenYabeLock):
+    self.wrapper('WebPush')
     logger.info('Process NO. {}, pid {}'.format(self.processNum, os.getpid()))
-    asyncio.run(asyncFlagChecking(self, True))
-    syncChangeBaudRate(self)
-    asyncio.run(asyncFlagChecking(self, False))
-    asyncio.run(AsyncModbusCheckReadRegisters(self))
-    
-    #Energy reading remain after power cycle; Max/Min editing range test
-    Model = asyncio.run(meterModelScan(self))
-    if(Model == 'E'):
-      asyncio.run(energyLegitCheck(self,1,0,True,Model)) 
-    else:
-      for i in range(3):
-        asyncio.run(energyLegitCheck(self,1,i,True,Model))   
-    
-    logger.info('{} DHCP Disabled'.format(self.serialNum))
-    asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.63.202 MODBUS ADD:258->0
-    asyncio.run(self.plug.powerCycle(130)) # wait for 90 sec
-    asyncio.run(asyncConnectIp(self)) #Inquire Ip address from Modbus Register
-    sleep(15)
-    openBrowser(self, lock)
-
-    logger.info("{} Static Ip Test on protocol 'Others' Finished".format(self.serialNum))
-    asyncio.run(asyncDHCPEnable(self)) 
-    asyncio.run(self.plug.powerCycleSlow())
-    asyncio.run(asyncConnectIp(self))
-    openBrowser(self, lock)
-
-    logger.info("{} Finished DHCP Test on protocol 'Others'".format(self.serialNum))
-    logger.info('Changing {} protocol 2 to WEB2 with baud rate of 115200'.format(self.serialNum))
-    asyncio.run(asyncChangeProtocol2(self))
-    asyncio.run(asyncChangeBaudrate2(self,11520))
-    
-    #web2 fixed ip
-    logger.info('{} DHCP disable'.format(self.serialNum))
-    asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.63.202/201 MODBUS ADD:258->0
-    asyncio.run(self.plug.powerCycle(130)) 
-    asyncio.run(asyncConnectIp(self)) #Inquire Ip address from Modbus Register
-    openBrowser(self, lock)    
-
-    #web 2 dhcp
-    asyncio.run(asyncDHCPEnable(self)) #4  
-    asyncio.run(self.plug.powerCycleSlow())
-    asyncio.run(asyncConnectIp(self))
-    openBrowser(self, lock)    
-
-############################Modbus TCP Test###########################################
-    logger.info('Modbus TCP to {} Test in progress'.format(self.address))
-    asyncio.run(AsyncModbusTCP(self, self.address)) # Modbus TCP Test
-
-  # ##########################WEB PUSH Related############################################
-  #   asyncio.run(asyncChangeProtocol2(self.BR,self.COM,'OTHER'))
-  #   asyncio.run(asyncChangeBaudrate2(self.BR,self.COM,38400))
-  #   asyncio.run(asyncDhcpDisable(self.BR,self.COM))
-  #   asyncio.run(AsyncManualIpWrite(self.BR, self.COM)) #set manual ip to 192.168.63.202 MODBUS ADD:258->0
-  #   asyncio.run(asyncio.sleep(6))
-  #   asyncio.run(plug.powerOff())        
-  #   run('WEB2 test finished, {} errors were found during the test: \n {}'.format(failCount,parseError))
-  #   ManualSwap = input("\nPlease enter 'y' to continue WEB Push Test.....")
-  #   while(ManualSwap not in 'Yy'):
-  #       ManualSwap = input("\nInvalid input, enter 'y' to continue.....")
-  #   logger.info('WEB Push Test in Process....')
-  #   asyncio.run(plug.powerOnSlow())
-  #   asyncio.run(asyncConnectIp(self.BR,self.COM))
-  #   sleep(10)
-  #   openBrowser(self, lock)
-  #   sleep(20)
-  #   asyncio.run(asyncDHCPEnable(self.BR,self.COM)) #4 
-  #   asyncio.run(asyncChangeBaudrate2(self.BR,self.COM,11520))
-  #   asyncio.run(plug.powerCycleSlow())
-  #   asyncio.run(asyncConnectIp(self.BR,self.COM))
-  #   sleep(10)
-  #   openBrowser(self, lock)
-  #   sleep(20)
-######################Read Register##############################################
-    newTest = AccuenergyModbusRequest(self.COM,self.BR)
-    newTest.rebootCounter(self) # Check reboot counter
+    asyncio.run(asyncChangeProtocol2(self,'OTHER', lock))
+    #asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.63.202 MODBUS ADD:258->0
+    # logger.info('WEB Push Test in Process....')
+    # asyncio.run(asyncConnectIp(self))
+    # sleep(15)
+    # openBrowser(self, lock)
+    # sleep(15)
+    # asyncio.run(asyncDHCPEnablePowerCycle(self)) #4+
+    # sleep(30)
+    #After webpush test, 
     asyncio.run(asyncChangeProtocol2(self,'PROFIBUS')) #change channel 2 to profibus
     logger.info('Protocol 1 is now set to BACnet, id of 3')
+
     asyncio.run(meterMountTypeScan(self)) #change channel 1 to BACnet
     with OpenYabeLock:
       BACnetConnectionTest(self)  
@@ -992,12 +952,94 @@ class TestRunner:
       parseError2 = ''
       for bugs in self.failTest:
         parseError2 += str(bugs) + ' '
-      run('Meter {} Test fails, with {} Errors {}'.format(self.serialNum,self.failCount,parseError2))
-      logger.error("Fail {} tests: {}".format(self.failCount,parseError2))
+      run('Meter {} Test fails, with {} Errors {}'\
+        .format(self.serialNum,self.failCount,parseError2))
+      logger.error("Fail {} tests: {}"\
+        .format(self.failCount,parseError2))
       #logger.info('Test Failed {}'.format(parseError2))
       self.failTest.append(self.serialNum)
-
+    logger.info('Phase 2 (Web push & BACnet) test completed')
     self.logFile.close()
+
+
+  # main test framework, subject to add new tests/parameters
+  # Inputs: shared_failCount -> global variable, need to acquire permit by calling share_failCount.get_lock()
+  def run_tests(self, shared_failCount, lock):
+    self.wrapper()
+    logger.info('Process NO. {}, pid {}'.format(self.processNum, os.getpid()))
+    # asyncio.run(asyncFlagTest(self))
+    asyncio.run(asyncFlagChecking(self, True))
+    syncChangeBaudRate(self)
+    asyncio.run(asyncFlagChecking(self, False))
+    asyncio.run(AsyncModbusCheckReadRegisters(self))
+  
+    #Energy reading remain after power cycle; Max/Min editing range test
+    Model = asyncio.run(meterModelScan(self))
+    if(Model == 'E'):
+      asyncio.run(energyLegitCheck(self,1,0,True,Model)) 
+    else:
+      for i in range(3):
+        asyncio.run(energyLegitCheck(self,1,i,True,Model))   
+  
+    logger.info('{} DHCP Disabled'.format(self.serialNum))
+    asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.63.202 MODBUS ADD:258->0
+    #asyncio.run(self.plug.powerCycle(130)) # wait for 90 sec
+    # asyncio.run(asyncConnectIp(self)) #Inquire Ip address from Modbus Register
+    sleep(15)
+    openBrowser(self, lock)
+
+    logger.info("{} Static Ip Test on protocol 'Others' Finished".format(self.serialNum))
+    asyncio.run(asyncDHCPEnablePowerCycle(self)) 
+    # asyncio.run(self.plug.powerCycleSlow())
+    # asyncio.run(asyncConnectIp(self))
+    sleep(15)
+    openBrowser(self, lock)
+
+    logger.info("{} Finished DHCP Test on protocol 'Others'".format(self.serialNum))
+    logger.info('Changing {} protocol 2 to WEB2 with baud rate of 115200'.format(self.serialNum))
+    asyncio.run(asyncChangeProtocol2(self))
+    # asyncio.run(asyncChangeBaudrate2(self,11520))
+  
+    #web2 fixed ip
+    logger.info('{} DHCP disable'.format(self.serialNum))
+    asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.63.202/201 MODBUS ADD:258->0
+    #asyncio.run(self.plug.powerCycle(130)) 
+    asyncio.run(asyncConnectIp(self)) #Inquire Ip address from Modbus Register
+    openBrowser(self, lock)    
+
+    #web 2 dhcp
+    asyncio.run(asyncDHCPEnable(self)) #4  
+    asyncio.run(self.plug.powerCycleSlow())
+    asyncio.run(asyncConnectIp(self))
+    openBrowser(self, lock)    
+
+# ############################Modbus TCP Test###########################################
+    logger.info('Modbus TCP to {} Test in progress'.format(self.address))
+    asyncio.run(AsyncModbusTCP(self, self.address)) # Modbus TCP Test
+
+######################Read Register##############################################
+    newTest = AccuenergyModbusRequest(self.COM,self.BR)
+    newTest.rebootCounter(self) # Check reboot counter
+    
+    if(self.failCount==0):
+      print(success)
+    else:
+      with shared_failCount.get_lock():
+        value = shared_failCount.value
+        value += 1
+        shared_failCount.value = value
+      print(fail)
+      parseError2 = ''
+      for bugs in self.failTest:
+        parseError2 += str(bugs) + ' '
+      run('Meter {} Test fails, with {} Errors {}'\
+        .format(self.serialNum,self.failCount,parseError2))
+      logger.error("Fail {} tests: {}"\
+        .format(self.failCount,parseError2))
+      #logger.info('Test Failed {}'.format(parseError2))
+      self.failTest.append(self.serialNum)
+      
+    logger.info('General(web2) test completed')
     
 #############Config init#####################
 if __name__ == '__main__':
@@ -1015,15 +1057,16 @@ if __name__ == '__main__':
     
     while(continueAdding and portList):
       print('Available ports:',portList)
-      portNUM = input('Process {} will connect to com port '.format(processID))
+      portNUM = input('Process {} will connect to com port '\
+        .format(processID))
       portNUM = 'COM'+portNUM
       if(portNUM in portList):
-        continueAdding = True if ('Y'== input('Enter y/Y to add another meter ? ').upper()) else False
+        continueAdding = True if ('Y'== input('Enter y/Y to add another meter ? ')\
+          .upper()) else False
         # input y to add new meter
         processID += 1
         PortOrder.append(portNUM)
         portList.remove(portNUM)
-        
     start_time = time.time()    
     shared_failCount = multiprocessing.Value('i',0)
     openbrowserlock = multiprocessing.Lock()
@@ -1033,50 +1076,71 @@ if __name__ == '__main__':
       plug = KasaSmartPlug(PlugIp)
       TR = TestRunner(c+1, plug, port)
       process = multiprocessing.Process(target=TR.run_tests, \
-                                        args=(shared_failCount,openbrowserlock,openyabelock,))
+                                        args=(shared_failCount,\
+                                          openbrowserlock,))
       jobList.append(process)
       
     for j in jobList:
       j.start()
     
     for j in jobList:
+      
       j.join()
       
     end_time = time.time()
     runtime = end_time - start_time
-    
+    global_error = shared_failCount.value #store total error count for both phase1 and phase2 test
     if(shared_failCount.value == 0):
-      print(allPassed)
-      run('All Test finished successfully, total runtime of {}m{}s'.format(int(runtime//60),int(runtime%60)))
+      print(p1Passed)
+      run('ections test finished successfully, total runtime of {}m{}s'\
+        .format(int(runtime//60),int(runtime%60)))
       pass
     else:
-      print(partialFail)
-      run('Some Meter fail to pass all tests, total runtime of {}m{}s'.format(int(runtime//60),int(runtime%60)))
+      print(p1Fail)
+      run('Some Meter fail to pass all tests, total runtime of {}m{}s'\
+        .format(int(runtime//60),int(runtime%60)))
       pass
-    logger.info("Test finished, runtime: {} minutes {} seconds".format(int(runtime//60),int(runtime%60)))
+    logger.info("Gen. tests finished, runtime: {} minutes {} seconds"\
+      .format(int(runtime//60),int(runtime%60)))
+
+    Web2Test = input('Press Enter to continue WEB Push Test ')
+    start_time2 = time.time()    
+    shared_failCount = multiprocessing.Value('i',0)
+    openbrowserlock = multiprocessing.Lock()
+    tasks = []
+    for c,port in enumerate(PortOrder):
+      PlugIp = targetIp[c]
+      plug = KasaSmartPlug(PlugIp)
+      TR = TestRunner(c+1, plug, port)
+      process = multiprocessing.Process(target=TR.run_webpush, \
+                                        args=(shared_failCount,\
+                                        openbrowserlock,openyabelock,))
+      tasks.append(process)
+      
+    for j in tasks:
+      j.start()
+
+    for j in tasks:
+      j.join()
+      
+    end_time2 = time.time()
+    runtime2 = end_time2 - start_time2
+    prev_error = global_error
+    global_error += shared_failCount.value
     
-    #WEB-Push Test
-  # ##########################WEB PUSH Related############################################
-  #   asyncio.run(asyncChangeProtocol2(self.BR,self.COM,'OTHER'))
-  #   asyncio.run(asyncChangeBaudrate2(self.BR,self.COM,38400))
-  #   asyncio.run(asyncDhcpDisable(self.BR,self.COM))
-  #   asyncio.run(AsyncManualIpWrite(self.BR, self.COM)) #set manual ip to 192.168.63.202 MODBUS ADD:258->0
-  #   asyncio.run(asyncio.sleep(6))
-  #   asyncio.run(plug.powerOff())        
-  #   run('WEB2 test finished, {} errors were found during the test: \n {}'.format(failCount,parseError))
-  #   ManualSwap = input("\nPlease enter 'y' to continue WEB Push Test.....")
-  #   while(ManualSwap not in 'Yy'):
-  #       ManualSwap = input("\nInvalid input, enter 'y' to continue.....")
-  #   logger.info('WEB Push Test in Process....')
-  #   asyncio.run(plug.powerOnSlow())
-  #   asyncio.run(asyncConnectIp(self.BR,self.COM))
-  #   sleep(10)
-  #   openBrowser(self, lock)
-  #   sleep(20)
-  #   asyncio.run(asyncDHCPEnable(self.BR,self.COM)) #4 
-  #   asyncio.run(asyncChangeBaudrate2(self.BR,self.COM,11520))
-  #   asyncio.run(plug.powerCycleSlow())
-  #   asyncio.run(asyncConnectIp(self.BR,self.COM))
-  #   sleep(10)
-  #   openBrowser(self, lock)
-  #   sleep(20)
+    if(global_error==0):
+      if(shared_failCount.value!=0):
+        print(p2Fail)      
+        run('Some Meter fail to pass all tests, total runtime of {}m{}s'\
+          .format(int(runtime//60),int(runtime%60)))
+      elif(shared_failCount.value == 0):
+        print(allPassed)
+        
+    else:
+      print(fail)  
+      run('Some test failed, total runtime of {}m{}s'\
+        .format(int(runtime//60),int(runtime%60)))
+      pass
+
+    logger.info("Test finished, runtime: {} minutes {} seconds"\
+      .format(int(runtime//60),int(runtime%60)))

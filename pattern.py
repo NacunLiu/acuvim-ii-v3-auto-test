@@ -9,8 +9,11 @@ import pyfiglet
 from termcolor import colored
 success = colored(pyfiglet.figlet_format("Test Completed"),'light_cyan')
 fail = colored(pyfiglet.figlet_format("Test Failed"),'red',attrs=['bold'])
-partialFail = colored(pyfiglet.figlet_format("Some Tests Failed"),'light_yellow',attrs=['bold'])
-allPassed = colored(pyfiglet.figlet_format("ALL Tests Passed"),'light_green',attrs=['bold'])
+p1Fail = colored(pyfiglet.figlet_format("Phase 2 Failed"),'light_yellow',attrs=['bold'])
+p2Fail = colored(pyfiglet.figlet_format("Phase 2 Tests Failed"),'light_yellow',attrs=['bold'])
+allPassed = colored(pyfiglet.figlet_format("ALL Tests Passed"),'green',attrs=['bold'])
+p1Passed = colored(pyfiglet.figlet_format("Phase 1 Passed"),'light_green',attrs=['bold'])
+p2Passed = colored(pyfiglet.figlet_format("Phase 2 Passed"),'light_green',attrs=['bold'])
 # Create the PyFiglet text
 text = pyfiglet.figlet_format("AcuTest GO", font="slant")
 
@@ -31,4 +34,7 @@ if(__name__ == '__main__'):
     print(fail)
     print(success)
     print(allPassed)
-    print(partialFail)
+    print(p1Fail)
+    print(p2Fail)
+    print(p1Passed)
+    print(p2Passed)

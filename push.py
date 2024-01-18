@@ -26,7 +26,7 @@ try:
     email = str(df['Email'])
     region = 'ca-central-1'  # central Canada Server
 except FileNotFoundError as e:
-    logger.info("Unable to locate rootkey.csv, AWS SNS Push service disabled")
+    logger.info("Unable to locate rootkey.csv, aws sns service disabled")
 
 class SnsWrapper:
     def __init__(self,snsResource): 
@@ -113,7 +113,7 @@ def run(message):
             sns_wrapper = SnsWrapper(boto3.client('sns',aws_access_key_id=AK,aws_secret_access_key = SK, region_name = region))
             sns_wrapper.push_message(email,message)
     except NameError:
-        logger.warning('AWS SNS feature disabled...')
+        logger.warning('AWS SNS disabled...')
         
 if __name__ == '__main__':
     run('TEST DURATION TIME MESSAGE CONTEXT')
