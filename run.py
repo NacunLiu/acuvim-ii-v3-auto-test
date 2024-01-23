@@ -28,7 +28,7 @@ from bacnetTest import Client
 import multiprocessing
 ###########################################################
 logger = logging.getLogger(__name__)
-coloredlogs.install(level='INFO', logger=logger, fmt='%(asctime)s %(hostname)s %(levelname)s %(message)s')
+coloredlogs.install(level='DEBUG', logger=logger, fmt='%(asctime)s %(hostname)s %(levelname)s %(message)s')
 
 """
 AccuenergyModbusRequest Class
@@ -119,9 +119,11 @@ def syncConnectWrite(Baudrate,Port,Address,Value,promptEnable:bool = False):
   client = ModbusSerialClient (method='rtu', port=Port, baudrate=Baudrate, parity='N', 
                             stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   client.connect()
+  sleep(1)
   if(promptEnable):
     logger.info('Sync Connection Status: {}'.format(client.connected))
   SyncModbusWriteRegisters(client,Address,Value)
+  sleep(1)
   client.close()
 
 ############################################
@@ -130,7 +132,7 @@ def syncConnectWrite(Baudrate,Port,Address,Value,promptEnable:bool = False):
 # inputs: ModbusSerialClient, destination address, and list of values
 def SyncModbusWriteRegisters(client, Address, Value): 
   #write_registers(address: int, values: List[int] | int, slave: int = 0, **kwargs: Any) ModbusResponse #0x10
-  builder = BinaryPayloadBuilder(byteorder=Endian.Big)
+  builder = BinaryPayloadBuilder(byteorder=Endian.BIG)
   for value in Value:
     assert(value<=65535 and value>=0),"Input overflow~"
     builder.add_16bit_uint(value)
@@ -189,6 +191,7 @@ async def AsyncModbusCheckReadRegisters(acuClass,readAddress = 27136):
   client = AsyncModbusSerialClient (method='rtu', port=acuClass.COM, baudrate=acuClass.BR, parity='N', 
                             stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   await client.connect()
+  await asyncio.sleep(1)
   RR = await asyncReadRegisters(client,readAddress,1)
 
   try:
@@ -207,12 +210,12 @@ async def AsyncModbusCheckReadRegisters(acuClass,readAddress = 27136):
 # purpose: store ip address of the meter
 async def asyncModbusCheckIp(acuClass, client):
     rr = await asyncReadRegisters(client,259,2)
+    await asyncio.sleep(0.5)
     ip = ''
     try:
       assert rr.registers    
       for reading in rr.registers:
         ip_hex = format(int(reading),'02X')
-
         if(reading>255):
           ip += str(int(ip_hex[:2],16)) + '.'+ str(int(ip_hex[2:],16))+'.'
         else:
@@ -247,15 +250,16 @@ async def asyncConnectIp(acuClass):
     parity='N',stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   try:
     await client.connect()
-    acuClass.plug.loading_animation(25)
-    #logger.debug('Async Connection Status: {}'.format(client.connected))
+    await asyncio.sleep(1)
+    logger.debug('Async Connection Status: {}'.format(client.connected))
     await asyncModbusCheckIp(acuClass, client)
-    client.close()
+    
   except Exception as e:
      acuClass.failCount += 1
      acuClass.failTest.append('\nasyncConnectIp function Failed{}'.format(acuClass.serialNum))
      logger.warning(e)
-     logger.error("COM Occupied")
+     logger.error("COM Occupied during asyncConnectIp test")
+  client.close()
   await asyncio.sleep(10)
   
 
@@ -265,7 +269,6 @@ async def asyncConnectIp(acuClass):
 async def AsyncManualIpWrite(acuClass,Address=259,Value=[49320,16330]):
   logger.info('{} Manual DHCP Test in process.....'.format(acuClass.serialNum))
   await asyncConnectWrite(acuClass, 258, [0],'Disabling DHCP....') #set to DHCP Disabled
-  await asyncio.sleep(5)
   if(acuClass.processNum ==1):
     await asyncConnectWrite(acuClass, Address, Value)
   elif(acuClass.processNum == 2):
@@ -294,7 +297,7 @@ async def AsyncManualEnergyWriteLegacy(acuClass):
   await asyncConnectWrite(acuClass,18688,[21,62748,7,18954,7,21871,7,21992,0,0,0,0,0,0,0,0])
   #Epa, Epb, phase-wise energy
   await asyncConnectWrite(acuClass,17952,[6,47101,0,6775,6,52223,0,12060,6,63425,0,
-                                          2511,0,200,0,49436,0,11760,0,35876,0,5567,
+                                          2511,0,3200,0,49436,0,11760,0,35876,0,5567,
                                           0,38094,7,18954,7,21871,7,21922])
   #four-quad energy q
   await asyncConnectWrite(acuClass,18704,[3,61059,0,835,0,1430,0,4828,0,35539,
@@ -313,7 +316,8 @@ async def asyncDHCPEnablePowerCycle(acuClass):
 # Purpose: Enable DHCP
 async def asyncDHCPEnable(acuClass):
   await asyncConnectWrite(acuClass, 258, [1],'{} DHCP enabled'.format(acuClass.serialNum)) #Enabled DHCP 
-  
+  await acuClass.plug.powerCycleSlow()
+  await asyncConnectIp(acuClass)
   #REQUIRE POWERCYCLE
 
 # Purpose: Change Baudrate for channel 2
@@ -347,7 +351,7 @@ async def asyncChangeProtocol2(acuClass, Mode=None, lock = None):
                             .format(acuClass.serialNum))
   else:
     await asyncConnectWrite(acuClass, 4152, [4], 'Changing channel 2 to Web 2')
-    asyncio.run(asyncChangeBaudrate2(acuClass,11520))
+    await asyncChangeBaudrate2(acuClass,11520)
   #REQUIRE POWERCYCLE
 
 ## If possible, create an async version to prevent racing condition
@@ -362,7 +366,7 @@ def syncChangeBaudRate(acuClass):
 
   for rate in keys:
     syncConnectWrite(curRate, acuClass.COM ,4098,[dict[rate]])
-    sleep(8)
+
     client = ModbusSerialClient(method='rtu', port=acuClass.COM, baudrate=rate, parity='N', 
                             stopbits=1,bytesize= 8,timeout=1, unit=1)
     client.connect()
@@ -380,7 +384,7 @@ async def asyncFlagTest(acuClass):
   await asyncFlagChecking(acuClass,True)
   syncChangeBaudRate(acuClass)
   await asyncFlagChecking(acuClass,False)
-  await AsyncModbusCheckReadRegisters
+  await AsyncModbusCheckReadRegisters(acuClass)
   
 async def asyncFlagChecking(acuClass, resetEnable: bool):
 
@@ -391,7 +395,9 @@ async def asyncFlagChecking(acuClass, resetEnable: bool):
       logger.debug('Erasing Latency Register....')
       newTest = AccuenergyModbusRequest(acuClass.COM,acuClass.BR)
       await newTest.rebootLatency()
+      await asyncio.sleep(1)
       await client.connect()
+      await asyncio.sleep(1)
       RR = await asyncReadRegisters(client,38146,1)
       latency = RR.registers[-1]
       logger.debug('Latency Register Reading: {}'.format(latency))
@@ -400,6 +406,7 @@ async def asyncFlagChecking(acuClass, resetEnable: bool):
       
   else:
     await client.connect()
+    await asyncio.sleep(1)
     RR = await asyncReadRegisters(client,38146,1)
     latency = RR.registers[-1]
     logger.debug('Latency Register Reading: {}'.format(latency))  
@@ -422,6 +429,7 @@ async def NDModbusConfig(acuClass,round=0):
                         stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
     try:
       await client.connect()
+      await asyncio.sleep(1)
       RR = await asyncReadRegisters(client,4098,1)
       client.close()
       logger.info('Meter @ Baud rate 9600 test passed, reading: {}'
@@ -440,6 +448,7 @@ async def NDModbusConfig(acuClass,round=0):
         client = AsyncModbusSerialClient(method='rtu', port=acuClass.COM, baudrate=19200, parity='N', 
                         stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
         await client.connect()
+        await asyncio.sleep(1)
         RR = await asyncReadRegisters(client,4096,1)
     except asyncio.exceptions.CancelledError:
       logger.warning('Test passed')
@@ -455,6 +464,7 @@ async def meterMountTypeScan(acuClass):
   client = AsyncModbusSerialClient(method='rtu', port=acuClass.COM, baudrate=acuClass.BR, parity='N', 
                             stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   await client.connect()
+  await asyncio.sleep(1)
   RR = await asyncReadRegisters(client,61553,1)
   client.close()
   logger.info("{} MeterMountTest started".format(acuClass.serialNum))
@@ -481,6 +491,7 @@ async def meterModelScan(acuClass) -> str:
                                    baudrate=acuClass.BR, parity='N', 
                             stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   await client.connect()
+  await asyncio.sleep(1)
   RR = await asyncReadRegisters(client,61440,2)
   Model = ''
   for reading in RR.registers:
@@ -498,6 +509,7 @@ async def checkEnergy(acuClass,Address, Size):
                                     baudrate=acuClass.BR, parity='N', 
                           stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   await client.connect()
+  await asyncio.sleep(1)
   RR = await asyncReadRegisters(client,Address,Size)
   client.close()
   return RR.registers
@@ -508,6 +520,7 @@ async def checkEnergyLegacy(acuClass):
                           baudrate=acuClass.BR, parity='N', 
                           stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   await client.connect()
+  await asyncio.sleep(1)
   RR = await asyncReadRegisters(client,16456,18)
   RR2 = await asyncReadRegisters(client,18688,16)
   RR3 = await asyncReadRegisters(client,17952,30)
@@ -515,7 +528,7 @@ async def checkEnergyLegacy(acuClass):
   Energy += RR2.registers
   Energy += RR3.registers
   client.close()
-  logger.debug('{} Energy: {}'.format(acuClass.serialNum,Energy))
+  logger.info('{} Energy in meter: {}'.format(acuClass.serialNum,Energy))
   return Energy
 
 ##########################################
@@ -525,35 +538,55 @@ async def asyncConnectWrite(acuClass, Address: int,\
   Value: list, prompt:str=None):
   if(prompt):
     logger.info(prompt)
-  client = AsyncModbusSerialClient (method='rtu', \
-    port= acuClass.COM, baudrate=acuClass.BR, parity='N', 
-    stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
+  
+  client = AsyncModbusSerialClient(method='rtu',port= acuClass.COM,\
+                                   baudrate=acuClass.BR, parity='N',\
+                                   stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   try:
     await client.connect()
-    logger.debug('Async Connection Status: {}'.format(client.connected))
-    await asyncModbusWriteRegisters(client,Address,Value)
+    logger.debug('RTU Connection Status: {}'.format(client.connected)) 
+    address = Address
+    builder = BinaryPayloadBuilder(byteorder=Endian.BIG)
+    for value in Value:
+      value = int(value)
+      logger.debug('writing {} to {}'.format(value,address))
+      address += 1
+      builder.add_16bit_uint(value)
+    await asyncio.sleep(1)
+    await client.write_registers(Address, builder.to_registers(),slave=1)
+    await asyncio.sleep(1)
+    
   except Exception as e:
+    logger.warning('Unable to write {}'.format(e))
     acuClass.failCount += 1
     acuClass.failTest.append('\nCheck asyncConnectWrite function {} Value {}'
                              .format(acuClass.BR, Address))
-    logger.exception("COM Port Occupied")
-  await asyncio.sleep(3)
   client.close()
+  await asyncio.sleep(1)
+    # logger.exception("COM Port Occupied")
+
+
   
 ##########################################
 # Purpose: Asyn write register
-async def asyncModbusWriteRegisters(client, Address, Value: list): 
-  #write_registers(address: int, values: List[int] | int, slave: int = 0, **kwargs: Any) ModbusResponse #0x10
+async def asyncModbusWriteRegisters(client, Address, Value: list):
+  await client.connect()
+  logger.debug('RTU Connection Status: {}'.format(client.connected)) 
   address = Address
-  builder = BinaryPayloadBuilder(byteorder=Endian.Big)
+  builder = BinaryPayloadBuilder(byteorder=Endian.BIG)
   for value in Value:
     value = int(value)
     logger.debug('writing {} to {}'.format(value,address))
     address += 1
-    assert(value<=65535 and value>=0),"Input Overflow~"
+    assert(value<=65535 and value>=0),"Input overflow"
     builder.add_16bit_uint(value)
-  await client.write_registers(Address, builder.to_registers(),slave=1)
-    
+
+  try:
+    await client.write_registers(Address, builder.to_registers(),slave=1)
+    sleep(2)
+  except Exception as e:
+    logger.warning('Unable to write {}'.format(e))
+  client.close()
 ##########################################
 # pingTest:
 # This module will ping the ip address three times. If error, prompt Error, otherwise, active
@@ -637,7 +670,6 @@ async def energyLegitCheck(acuClass, SequenceId,Display,Control,MeterModel):
     contents = [15258,51711]*5+[50277,13825]+[15258,51711]+[50277,13825]+[15258,51711]
     await asyncManualEnergyWrite(acuClass, start_address, contents,True)
     await isMemorySectionEmpty(acuClass,start_address)
-    # await plug.powerCycleEnergy()
     if(await ReadingComparator(acuClass,contents,start_address,len(contents))):
       logger.info("{} Three-phase Negative Ep/q Test 1.2 passed"
                   .format(acuClass.serialNum))
@@ -753,6 +785,7 @@ async def isMemorySectionEmpty(acuClass,StartAddress):
   client = AsyncModbusSerialClient (method='rtu', port=acuClass.COM, baudrate=acuClass.BR, parity='N', 
                           stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   await client.connect()
+  await asyncio.sleep(1)
   MemoryAddress = defaultdict(int)
   MemoryAddress[16456] = 9
   MemoryAddress[17952] = 15
@@ -775,6 +808,7 @@ async def AsyncReadModelType(Baudrate, COM):
   client = AsyncModbusSerialClient(method='rtu', port=COM, baudrate=Baudrate, parity='N', 
                         stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   await client.connect()
+  await asyncio.sleep(1)
   RR = await asyncReadRegisters(client,61552,1)
   client.close()
   return RR.registers[-1]
@@ -789,13 +823,16 @@ async def EnergyMemoryRetention(acuClass, WaitControl):
   await AsyncManualEnergyWriteLegacy(acuClass)
   Energy = await checkEnergyLegacy(acuClass)
   try:
-    assert Energy == [20,31679,0,21347,0,20528,1,57872,20,53026,20,10332,2,\
-                      12865,65534,28193,21,62748,21,62748,7,18954,7,21871,
-                      7,21992,0,0,0,0,0,0,0,0,6,47101,0,6775,6,52223,0,12060,\
-                        6,63425,0,2511,0,3200,0,49436,0,11760,0,35876,
-                      0,5567,0,38094,7,18954,7,21871,7,21922]
-    await acuClass.plug.powerCycleSuperSlow()
-    Energy = await checkEnergyLegacy(acuClass)
+    assert Energy == [20,31679,0,21347,0,20528,1,57872,20,53026,20,10332,2,12865,65534,28193,21,62748,21,62748,7,18954,7,21871,7,21992,0,0,0,0,0,0,0,0,6,47101,0,6775,6,52223,0,12060,
+                        6,63425,0,2511,0,3200,0,49436,0,11760,0,35876,0,5567,0,38094,7,18954,7,21871,7,21922]
+  except AssertionError:
+    acuClass.failCount += 1
+    acuClass.failTest.append('\nEnergy memory retention test 1 fails')
+    logger.error('{} Energy memory retention test 1 has failed {}'.format(acuClass.serialNum, Energy))
+    
+  await acuClass.plug.powerCycleSuperSlow()
+  Energy = await checkEnergyLegacy(acuClass)
+  try:
     assert Energy == [20,31679,0,21347,0,20528,1,57872,20,53026,20,10332,2,\
                       12865,65534,28193,21,62748,21,62748,7,18954,7,21871,
                       7,21992,0,0,0,0,0,0,0,0,6,47101,0,6775,6,52223,0,12060,\
@@ -805,15 +842,16 @@ async def EnergyMemoryRetention(acuClass, WaitControl):
     
   except AssertionError:
     acuClass.failCount += 1
-    acuClass.failTest.append('\nEnergy memory retention test Fail')
-    logger.error('{} Energy memory retention test has failed {}'.format(acuClass.serialNum, Energy))
+    acuClass.failTest.append('\nEnergy memory retention test 2 fails')
+    logger.error('{} Energy memory retention test 1 has failed {}'.format(acuClass.serialNum, Energy))
 
 # purpose: This function will clear all DI reading
 async def asyncDIClear(acuClass):
   client = AsyncModbusSerialClient (method='rtu', port=acuClass.COM, baudrate=acuClass.BR, parity='N', 
                           stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   await client.connect()
-  builder = BinaryPayloadBuilder(byteorder=Endian.Big)
+  await asyncio.sleep(1)
+  builder = BinaryPayloadBuilder(byteorder=Endian.BIG)
   currentModel = input('Input DI Module (e.g. 11 represents AXM-IO11)')
   model = defaultdict(int)
   models = ['11','12','21','22','31','32']
@@ -840,7 +878,8 @@ async def AsyncFactoryDefault(Baudrate):
   client = AsyncModbusSerialClient (method='rtu', port=gCOM, baudrate=Baudrate, parity='N',
                           stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   await client.connect()
-  builder = BinaryPayloadBuilder(byteorder=Endian.Big)
+  
+  builder = BinaryPayloadBuilder(byteorder=Endian.BIG)
   value = 1
   builder.add_16bit_uint(value)
   await client.write_registers(4134, builder.to_registers(),slave=1)
@@ -860,7 +899,7 @@ def BACnetConnectionTest(acuClass):
 # Purpose: Async write register through TCP
 async def asyncTCPWriteRegisters(client,address, Values,slaveId):
   start_address = address
-  builder = BinaryPayloadBuilder(byteorder=Endian.Big)
+  builder = BinaryPayloadBuilder(byteorder=Endian.BIG)
   for value in Values:
     value = int(value)
     logger.debug('writing {} to {}'.format(value,address))
@@ -874,6 +913,7 @@ async def AsyncReadSerialId(acuClass, slaveId):
   client =  AsyncModbusSerialClient (method='rtu', port=acuClass.COM, baudrate=acuClass.BR, parity='N', 
                             stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   await client.connect()
+  await asyncio.sleep(1)
   try:
     SR = await client.read_holding_registers(61504,6, slaveId)
     SerialNumber = ''
@@ -924,16 +964,9 @@ class TestRunner:
   # Frame for Web WebPush Test
   def run_webpush(self,shared_failCount,lock,OpenYabeLock):
     self.wrapper('WebPush')
+    asyncio.run(self.plug.powerOn(1))
     logger.info('Process NO. {}, pid {}'.format(self.processNum, os.getpid()))
     asyncio.run(asyncChangeProtocol2(self,'OTHER', lock))
-    #asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.63.202 MODBUS ADD:258->0
-    # logger.info('WEB Push Test in Process....')
-    # asyncio.run(asyncConnectIp(self))
-    # sleep(15)
-    # openBrowser(self, lock)
-    # sleep(15)
-    # asyncio.run(asyncDHCPEnablePowerCycle(self)) #4+
-    # sleep(30)
     #After webpush test, 
     asyncio.run(asyncChangeProtocol2(self,'PROFIBUS')) #change channel 2 to profibus
     logger.info('Protocol 1 is now set to BACnet, id of 3')
@@ -967,11 +1000,7 @@ class TestRunner:
   def run_tests(self, shared_failCount, lock):
     self.wrapper()
     logger.info('Process NO. {}, pid {}'.format(self.processNum, os.getpid()))
-    # asyncio.run(asyncFlagTest(self))
-    asyncio.run(asyncFlagChecking(self, True))
-    syncChangeBaudRate(self)
-    asyncio.run(asyncFlagChecking(self, False))
-    asyncio.run(AsyncModbusCheckReadRegisters(self))
+    asyncio.run(asyncFlagTest(self))
   
     #Energy reading remain after power cycle; Max/Min editing range test
     Model = asyncio.run(meterModelScan(self))
@@ -983,34 +1012,24 @@ class TestRunner:
   
     logger.info('{} DHCP Disabled'.format(self.serialNum))
     asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.63.202 MODBUS ADD:258->0
-    #asyncio.run(self.plug.powerCycle(130)) # wait for 90 sec
-    # asyncio.run(asyncConnectIp(self)) #Inquire Ip address from Modbus Register
     sleep(15)
     openBrowser(self, lock)
 
     logger.info("{} Static Ip Test on protocol 'Others' Finished".format(self.serialNum))
     asyncio.run(asyncDHCPEnablePowerCycle(self)) 
-    # asyncio.run(self.plug.powerCycleSlow())
-    # asyncio.run(asyncConnectIp(self))
-    sleep(15)
     openBrowser(self, lock)
 
     logger.info("{} Finished DHCP Test on protocol 'Others'".format(self.serialNum))
     logger.info('Changing {} protocol 2 to WEB2 with baud rate of 115200'.format(self.serialNum))
     asyncio.run(asyncChangeProtocol2(self))
-    # asyncio.run(asyncChangeBaudrate2(self,11520))
   
     #web2 fixed ip
     logger.info('{} DHCP disable'.format(self.serialNum))
     asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.63.202/201 MODBUS ADD:258->0
-    #asyncio.run(self.plug.powerCycle(130)) 
-    asyncio.run(asyncConnectIp(self)) #Inquire Ip address from Modbus Register
     openBrowser(self, lock)    
 
     #web 2 dhcp
     asyncio.run(asyncDHCPEnable(self)) #4  
-    asyncio.run(self.plug.powerCycleSlow())
-    asyncio.run(asyncConnectIp(self))
     openBrowser(self, lock)    
 
 # ############################Modbus TCP Test###########################################
@@ -1038,7 +1057,7 @@ class TestRunner:
         .format(self.failCount,parseError2))
       #logger.info('Test Failed {}'.format(parseError2))
       self.failTest.append(self.serialNum)
-      
+    asyncio.run(self.plug.powerOff())
     logger.info('General(web2) test completed')
     
 #############Config init#####################
@@ -1053,26 +1072,35 @@ if __name__ == '__main__':
     continueAdding = True
     processID = 1
     portList = serial_ports()
-    PortOrder = []
-    
+    plugMap = targetIp
+    plugList = list(targetIp.keys())
+    portOrder = []
+    plugOrder = []
+
     while(continueAdding and portList):
-      print('Available ports:',portList)
+      print('Available ports:',portList,'available plug:',plugList)
       portNUM = input('Process {} will connect to com port '\
         .format(processID))
       portNUM = 'COM'+portNUM
-      if(portNUM in portList):
-        continueAdding = True if ('Y'== input('Enter y/Y to add another meter ? ')\
+      plugId = int(input('With Plug '))
+    
+      if(portNUM in portList and plugId in range(6)): #verify the integrity of inputs
+        continueAdding = True if ('Y'== input('Enter y/Y to add another meter or none to continue ')\
           .upper()) else False
         # input y to add new meter
         processID += 1
-        PortOrder.append(portNUM)
+        portOrder.append(portNUM)
+        plugOrder.append(plugId)
         portList.remove(portNUM)
+        plugList.remove(plugId)
+
     start_time = time.time()    
     shared_failCount = multiprocessing.Value('i',0)
     openbrowserlock = multiprocessing.Lock()
     openyabelock = multiprocessing.Lock()
-    for c,port in enumerate(PortOrder):
-      PlugIp = targetIp[c]
+    for c,port in enumerate(portOrder):
+      PlugIp = plugMap[plugOrder[c]][1]
+      # print(PlugIp,port)
       plug = KasaSmartPlug(PlugIp)
       TR = TestRunner(c+1, plug, port)
       process = multiprocessing.Process(target=TR.run_tests, \
@@ -1084,7 +1112,6 @@ if __name__ == '__main__':
       j.start()
     
     for j in jobList:
-      
       j.join()
       
     end_time = time.time()
@@ -1108,8 +1135,8 @@ if __name__ == '__main__':
     shared_failCount = multiprocessing.Value('i',0)
     openbrowserlock = multiprocessing.Lock()
     tasks = []
-    for c,port in enumerate(PortOrder):
-      PlugIp = targetIp[c]
+    for c,port in enumerate(portOrder):
+      PlugIp = plugMap[plugOrder[c]][1]
       plug = KasaSmartPlug(PlugIp)
       TR = TestRunner(c+1, plug, port)
       process = multiprocessing.Process(target=TR.run_webpush, \

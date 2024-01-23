@@ -21,7 +21,7 @@ class Client():
         self.test_start = (891,142)
         self.first_slave = (92,135)
         dir_path = os.getcwd()
-        self.yabe_executable_path = "C:\Program Files\Yabe\Yabe.exe"  # Replace with the actual path, subject to change
+        self.yabe_executable_path = 'C:\\Program Files\\Yabe\\Yabe.exe'  # Replace with the actual path, subject to change
         self.reference_path = dir_path+"\\Reference.png"
         if(not os.path.exists(os.getcwd()+'\\Sc')):
             os.mkdir('Sc')
@@ -29,23 +29,6 @@ class Client():
         self.ssim_value = None
         self.close_Yabe = (1899,0)
         self.id = id
-    
-    # def PortScanner(self):
-    #     delta_y = 12
-    #     x_start = 425
-    #     y_start = 150
-    #     x_end = 520
-    #     y_end = 162
-    #     path_header = os.getcwd()
-    #     reference = {1:path_header+'\\CCOM1.png', 8: path_header+'\\CCOM8.png',3: path_header+'\\CCOM3.png'}
-    #     pass
-    #     for ix in reference:
-    #         thisPath = os.getcwd()+'\\T.png'
-    #         screenshot = ImageGrab.grab(bbox=(x_start,y_start,x_end,y_end))
-    #         screenshot.save(thisPath)
-    #         y_start, y_end += delta_y
-    #         if(self.compare_Port(thisPath,reference[ix])):
-    #             self.id = 1
             
     def compare_Port(self, curPath, refPath):
         image1 = cv2.imread(curPath)

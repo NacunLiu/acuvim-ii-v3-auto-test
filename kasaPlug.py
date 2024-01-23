@@ -30,7 +30,7 @@ class KasaSmartPlug():
     
   async def powerCycle(self,time=20):
     await self.dev.update()
-    print('Power cycling the meter, please wait >>>>')
+    print('Power cycling plug {}, please wait >>>>'.format(self.Ip))
     await asyncio.sleep(2)
     await self.dev.turn_off()
     await asyncio.sleep(3)
@@ -54,10 +54,7 @@ class KasaSmartPlug():
       await self.dev.turn_off()
       await asyncio.sleep(2)
       await self.dev.turn_on()
-      self.loading_animation(60)
-
-    # else:
-    #   print('Unable to update')
+      time.sleep(90)
     
   async def powerCycleSuperSlow(self):
     await self.dev.update()
@@ -67,7 +64,7 @@ class KasaSmartPlug():
     await asyncio.sleep(3)
     await self.dev.turn_on()
     print('Powering up meter >>>>')
-    self.loading_animation(40)
+    self.loading_animation(50)
     
 
   async def powerCycleEnergy(self):
@@ -84,12 +81,12 @@ class KasaSmartPlug():
     print('Powering off the meter, please wait >>>>')
     await self.dev.turn_off()
 
-    
-  async def powerOn(self):
+  async def powerOn(self,sleep = None):
     await self.dev.update()
     print('Powering on the meter, please wait >>>>')
     await self.dev.turn_on()
-
+    if(sleep):
+      time.sleep(30)
     
   async def powerOnSlow(self):
     await self.dev.update()
@@ -100,11 +97,10 @@ class KasaSmartPlug():
     
 if __name__ == '__main__':
   PlugIp = targetIp
-  for i in range(2):
-    for ip in PlugIp:
-      plug = KasaSmartPlug(ip)
-      asyncio.run(plug.powerCycleSlow())
-    time.sleep(4)
+  for ip in PlugIp:
+    plug = KasaSmartPlug(targetIp[ip][1])
+    asyncio.run(plug.powerCycle())
+
 
   # plug = KasaSmartPlug(PlugIp[0])
   # asyncio.run(plug.powerCycleSlow())
