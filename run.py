@@ -970,7 +970,6 @@ class TestRunner:
     #After webpush test, 
     asyncio.run(asyncChangeProtocol2(self,'PROFIBUS')) #change channel 2 to profibus
     logger.info('Protocol 1 is now set to BACnet, id of 3')
-
     asyncio.run(meterMountTypeScan(self)) #change channel 1 to BACnet
     with OpenYabeLock:
       BACnetConnectionTest(self)  

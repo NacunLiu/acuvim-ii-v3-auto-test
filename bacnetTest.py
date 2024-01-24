@@ -10,16 +10,18 @@ import cv2
 from skimage.metrics import structural_similarity as ssim
 from PIL import ImageGrab
 import os
+import screeninfo
 
 class Client():
     def __init__(self,Serial,id):
-        self.start_scan_button_location = (28, 65)
-        self.start_scan_button_location = (28, 65)
-        self.port_location = (517, 144)
-        self.port_select = (483,168)
-        self.sec_port_select = (466,183)
-        self.test_start = (891,142)
-        self.first_slave = (92,135)
+        self.start_scan_button_location = None
+        self.port_location = None
+        self.firstMeter = None
+        self.secMeter = None
+        self.test_start = None
+        self.first_slave = None
+        self.close_Yabe = None
+        self.whichScreen = self.findScreen()
         dir_path = os.getcwd()
         self.yabe_executable_path = 'C:\\Program Files\\Yabe\\Yabe.exe'  # Replace with the actual path, subject to change
         self.reference_path = dir_path+"\\Reference.png"
@@ -27,9 +29,42 @@ class Client():
             os.mkdir('Sc')
         self.test_path = dir_path+"\\Sc\\"+Serial+".png"
         self.ssim_value = None
-        self.close_Yabe = (1899,0)
         self.id = id
-            
+
+    def findScreen(self):
+        screen_list = screeninfo.get_monitors()
+        print(screen_list)
+        if(len(screen_list)>1):
+            #two monitor config
+            self.start_scan_button_location = (28, 65)
+            self.port_location = (517, 144)
+            self.firstMeter = (483,168)
+            self.secMeter = (466,183)
+            self.test_start = (891,142)
+            self.first_slave = (92,135)
+            self.close_Yabe = (1899,0)
+            self.screen_type = 1
+        elif(screen_list[-1].height_mm<200):
+            #laptop screen config
+            self.start_scan_button_location = (17, 59)
+            self.port_location = (202, 255)
+            self.firstMeter = (148,296)
+            self.secMeter = (148,308)
+            self.test_start = (910,358)
+            self.first_slave = (80,127)
+            self.close_Yabe = (1888,0)
+            self.screen_type = 1
+        else:
+            #depends on screen setups
+            self.start_scan_button_location = (28, 65)
+            self.port_location = (517, 144)
+            self.firstMeter = (483,168)
+            self.secMeter = (466,183)
+            self.test_start = (891,142)
+            self.first_slave = (92,135)
+            self.close_Yabe = (1899,0)
+            self.screen_type = 0
+
     def compare_Port(self, curPath, refPath):
         image1 = cv2.imread(curPath)
         image2 = cv2.imread(refPath)
@@ -76,7 +111,10 @@ class Client():
         os.system("taskkill /f /im msedge.exe")
         subprocess.Popen([self.yabe_executable_path])
         sleep(2)
-        pyautogui.hotkey('winleft', 'up')
+        if(self.screen_type ==1):
+            pass
+        else:
+            pyautogui.hotkey('winleft', 'up')
         sleep(2)
         pyautogui.click(self.start_scan_button_location)
         sleep(2)
@@ -84,12 +122,12 @@ class Client():
         sleep(2)
         pyautogui.click(self.port_location)
         if(self.id==1):
-            pyautogui.click(self.port_select)
+            pyautogui.click(self.firstMeter)
         else:
-            pyautogui.click(self.sec_port_select)
+            pyautogui.click(self.secMeter)
         sleep(1)
         pyautogui.click(self.test_start)
-        sleep(30)
+        sleep(50)
         pyautogui.click(self.first_slave)
         sleep(5)
         self.take_screenshot()
