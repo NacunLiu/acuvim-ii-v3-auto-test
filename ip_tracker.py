@@ -17,18 +17,19 @@ plugDict = defaultdict(str)
 target_mac1 = "78:8C:B5:B5:15:9C"
 target_mac2 = "78:8C:B5:B5:07:58"
 target_mac3 = "9C:A2:F4:95:3E:27"
-target_mac4 = "9C:A2:F4:95:3D:55" #lab
+target_mac4 = "9C:A2:F4:95:3D:55"
 target_mac5 = "9C:A2:F4:95:3E:47"
 
-ip_range1 = "172.27.27.80-120"
+ip_range1 = "172.27.27.100-110"
 ip_range2 = "172.27.25.200-204"
-ip_range5 = "172.27.27.110-210"
-ip_range = "172.27.26.1-80"
+ip_range3 = "172.27.26.20-30"
+ip_range4 = "172.27.26.40-60"
+ip_range5 = "172.27.27.200-230"
 
 netDict[target_mac1] = ip_range1
 netDict[target_mac2] = ip_range2
-netDict[target_mac3] = ip_range
-netDict[target_mac4] = ip_range
+netDict[target_mac3] = ip_range3
+netDict[target_mac4] = ip_range4
 netDict[target_mac5] = ip_range5
 
 plugDict[target_mac1] = 1
@@ -58,12 +59,12 @@ def get_ip_address(target_mac):
 def nmap_scan(targetMAC):
     try:
         subprocess.check_output(["nmap", "-sn",netDict[targetMAC],"-oN","scan_results.txt"], universal_newlines=True)
-        return MacQuarry(targetMAC)
+        return macQuery(targetMAC)
     except subprocess.CalledProcessError as e:
-        print(e)
+        print('ERROR {}'.format(e))
         return None
     
-def MacQuarry(targetMAC):
+def macQuery(targetMAC):
     if(not targetMAC):
         print('Fail to load target MAC Address')
         return
@@ -74,7 +75,6 @@ def MacQuarry(targetMAC):
     # Regular expression patterns to match IP addresses and MAC addresses
     ip_pattern = r'(\d+\.\d+\.\d+\.\d+)'
     mac_pattern = r'[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}'
-    #print(mac_pattern)
     ip_addresses = re.findall(ip_pattern, scan_output)
     mac_addresses = re.findall(mac_pattern, scan_output)
 

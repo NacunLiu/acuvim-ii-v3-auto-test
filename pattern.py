@@ -7,15 +7,14 @@ Display test result
 """
 import pyfiglet
 from termcolor import colored
-success = colored(pyfiglet.figlet_format("Test Completed"),'light_cyan')
-fail = colored(pyfiglet.figlet_format("Test Failed"),'red',attrs=['bold'])
-p1Fail = colored(pyfiglet.figlet_format("Phase 2 Failed"),'light_yellow',attrs=['bold'])
-p2Fail = colored(pyfiglet.figlet_format("Phase 2 Tests Failed"),'light_yellow',attrs=['bold'])
-allPassed = colored(pyfiglet.figlet_format("ALL Tests Passed"),'green',attrs=['bold'])
-p1Passed = colored(pyfiglet.figlet_format("Phase 1 Passed"),'light_green',attrs=['bold'])
-p2Passed = colored(pyfiglet.figlet_format("Phase 2 Passed"),'light_green',attrs=['bold'])
+testFail = colored(pyfiglet.figlet_format("Test Failed",font='banner3-D',width=150),'red',attrs=['bold'])
+p1Fail = colored(pyfiglet.figlet_format("P1 Failed",font='banner3-D',width=100),'light_yellow',attrs=['bold'])
+p2Fail = colored(pyfiglet.figlet_format("P2 Failed",font='banner3-D',width=100),'light_yellow',attrs=['bold'])
+allPassed = colored(pyfiglet.figlet_format("Tests Completed",font='banner3-D',width=150),'green',attrs=['bold'])
+p1Passed = colored(pyfiglet.figlet_format("P1 Passed",font='banner3-D',width=100),'light_cyan',attrs=['bold'])
+p2Passed = colored(pyfiglet.figlet_format("P2 Passed",font='banner3-D',width=100),'light_cyan')
 # Create the PyFiglet text
-text = pyfiglet.figlet_format("AcuTest GO", font="slant")
+text = pyfiglet.figlet_format("AcuTest GO", font="slant",width=200)
 
 # Define a list of rainbow colors
 rainbow_colors = ['light_grey','light_grey','cyan','cyan', 'blue','blue','light_blue','light_blue']
@@ -31,8 +30,7 @@ for i, char in enumerate(text):
     
 if(__name__ == '__main__'):
     print(starter)
-    print(fail)
-    print(success)
+    print(testFail)
     print(allPassed)
     print(p1Fail)
     print(p2Fail)

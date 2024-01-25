@@ -33,7 +33,7 @@ class Client():
 
     def findScreen(self):
         screen_list = screeninfo.get_monitors()
-        print(screen_list)
+        # print(screen_list)
         if(len(screen_list)>1):
             #two monitor config
             self.start_scan_button_location = (28, 65)
