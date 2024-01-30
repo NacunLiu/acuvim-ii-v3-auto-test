@@ -1,6 +1,10 @@
 from time import sleep
 from pymodbus.client import ModbusTcpClient
 from collections import defaultdict
+
+kSleepTime = 5
+kWaitTime = 10
+
 class touTest():
   #ramdom ModbusTcpClient datetime
   def __init__(self,Host):
@@ -112,16 +116,17 @@ class touTest():
     #print(TariffIndex)
     start_address = self.TariffReadingRange[TariffIndex]+8
     start_reading = self.syncConnectRead(start_address,2)
-    sleep(sleeptime)
+    sleep(kWaitTime)
     end_reading = self.syncConnectRead(start_address,2)
     energyAccumulated = (end_reading-start_reading)/10 
-    expectedEnergy = 60*energyAccumulated*(60/sleeptime)
-    if(expectedEnergy-18000)>100:
-        print('Accumulated: {} Ref:{}'.format(expectedEnergy,18000))
+    expectedEnergy = 60*energyAccumulated*(60/kWaitTime)
+    if(abs(expectedEnergy-18000))>100:
+        print('Register reading incorrect!')
     else:
-        print('Pased: {} Ref:{}'.format(expectedEnergy,18000))
+        print('Passed: {} Ref:{}'.format(expectedEnergy,18000))
+        
     if(TariffIndex==0):
-        print('Sharp Apparent Energy Accumulated: {} kVA'.format(energyAccumulated))
+        print('Sharp Apparent Energy Accumulated: {} kVA Ref:{}'.format(energyAccumulated,18000))
     elif(TariffIndex==1):
         print('Peak Apparent Energy Accumulated: {} kVA'.format(energyAccumulated))
     elif(TariffIndex==2):
@@ -137,7 +142,7 @@ class touTest():
     #print(thisDetailSchedule)
     currDate = [2023]+[thisTime[0]]+[thisTime[1]]+[0,0,0] # year, month, day, [hr, min, sec]
                                                             # 0      1      2     3   4    5
-    sleepTime = 5
+    sleepTime = kSleepTime
     TariffIndex = thisDetailSchedule[5]
     self.syncConnectWrite(4160,currDate) # update meter clock 
     self.checkTouEnergy(TariffIndex,sleepTime)
@@ -145,13 +150,13 @@ class touTest():
     TariffIndex = thisDetailSchedule[2]
     self.syncConnectWrite(4160,currDate) # update meter clock 
     self.checkTouEnergy(TariffIndex,sleepTime)
-    sleep(5)
+    sleep(kSleepTime)
     
     currDate[3] = 15
     TariffIndex = thisDetailSchedule[5]
     self.syncConnectWrite(4160,currDate) # update meter clock 
     self.checkTouEnergy(TariffIndex,sleepTime)
-    sleep(5)
+    sleep(kSleepTime)
 
     #Depend on presentDate, this function will set the meter's clock to the desired date, starting from 
   def smartClock(self,presentDate=None):
