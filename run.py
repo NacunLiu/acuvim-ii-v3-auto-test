@@ -28,7 +28,7 @@ from bacnetTest import Client
 import multiprocessing
 ###########################################################
 logger = logging.getLogger(__name__)
-coloredlogs.install(level='DEBUG', logger=logger, fmt='%(asctime)s %(hostname)s %(levelname)s %(message)s')
+coloredlogs.install(level='INFO', logger=logger, fmt='%(asctime)s %(hostname)s %(levelname)s %(message)s')
 
 """
 AccuenergyModbusRequest Class
@@ -157,6 +157,7 @@ async def AsyncModbusTCP(acuClass, Host):
   slaveId = await AsyncModbusCheckReadRegisters(acuClass,4145)
   client = AsyncModbusTcpClient(Host)
   await client.connect()
+  sleep(2)
   try:
     data = await asyncReadRegisters(client, 259, 2, slaveId)#slave id == 1
     try:
@@ -373,9 +374,9 @@ def syncChangeBaudRate(acuClass):
     client = ModbusSerialClient(method='rtu', port=acuClass.COM, baudrate=rate, parity='N', 
                             stopbits=1,bytesize= 8,timeout=1, unit=1)
     client.connect()
-    sleep(2)
+    sleep(5)
     rr = client.read_holding_registers(address=4098,count=1, slave=1)
-    sleep(1)
+    sleep(2)
     try:
       assert(rr.registers[-1] == dict[rate])
       logger.info('{} baud rate {} passed'.format(acuClass.serialNum, rate))
@@ -487,7 +488,6 @@ async def meterMountTypeScan(acuClass):
   else:
     pass
 
-
 # This function will read the meter model, will return a leter to indicate meter type
 async def meterModelScan(acuClass) -> str: 
 
@@ -520,6 +520,7 @@ async def checkEnergy(acuClass,Address, Size):
   await client.connect()
   await asyncio.sleep(1)
   RR = await asyncReadRegisters(client,Address,Size)
+  await asyncio.sleep(1)
   client.close()
   return RR.registers
  
@@ -553,6 +554,7 @@ async def asyncConnectWrite(acuClass, Address: int,\
                                    stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   try:
     await client.connect()
+    await asyncio.sleep(1)
     logger.debug('RTU Connection Status: {}'.format(client.connected)) 
     address = Address
     builder = BinaryPayloadBuilder(byteorder=Endian.Big)
@@ -561,20 +563,16 @@ async def asyncConnectWrite(acuClass, Address: int,\
       logger.debug('writing {} to {}'.format(value,address))
       address += 1
       builder.add_16bit_uint(value)
-    await asyncio.sleep(1)
     await client.write_registers(Address, builder.to_registers(),slave=1)
     await asyncio.sleep(1)
-    
+    client.close()  
+    await asyncio.sleep(1)
   except Exception as e:
     logger.warning('Unable to write {}'.format(e))
     acuClass.failCount += 1
-    acuClass.failTest.append('\nCheck asyncConnectWrite function {} Value {}'
-                             .format(acuClass.BR, Address))
-  client.close()
-  await asyncio.sleep(1)
-    # logger.exception("COM Port Occupied")
-
-
+    acuClass.failTest.append('asyncConnectWrite function failed address: {}'\
+      .format(Address))
+    client.close()  
   
 ##########################################
 # Purpose: Asyn write register
@@ -604,7 +602,7 @@ def pingTest(acuClass,open_browser=False):
 
   try:
       # Use subprocess to run the ping command
-      result = subprocess.run(['ping', '-n', '5', acuClass.address], \
+      result = subprocess.run(['ping', '-n', '6', acuClass.address], \
         capture_output=True, text=True, timeout=5)
       if result.returncode == 0:
           ping_status = "Network Active"
@@ -809,9 +807,10 @@ async def isMemorySectionEmpty(acuClass,StartAddress):
       except AssertionError as e:
         acuClass.failCount+=1
         acuClass.failTest.append(e)
-  logger.info('{} Unwritten Memory Section Check Passed'.format(acuClass.serialNum))  
   client.close()
-
+  logger.info('{} Unwritten Memory Section Check Passed'.format(acuClass.serialNum))
+  await asyncio.sleep(1)  
+  
 
 async def AsyncReadModelType(Baudrate, COM):
   client = AsyncModbusSerialClient(method='rtu', port=COM, baudrate=Baudrate, parity='N', 
