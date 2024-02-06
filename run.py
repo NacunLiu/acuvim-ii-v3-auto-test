@@ -78,7 +78,9 @@ class AccuenergyModbusRequest():
     client.connect()
     rr = client.read_holding_registers(self.address, 1, slave=1)
     logger.info('Meter has a normal reboot time of {}'.format(rr.registers))
+    sleep(1)
     client.close()
+    sleep(1)
     return rr.registers[0]
   
   # Reboot Latency Register function
@@ -99,8 +101,10 @@ class AccuenergyModbusRequest():
     self.reset_counter += crc.to_bytes(2, byteorder='big')
     ser = serial.Serial(port=self.Port, baudrate=self.BR, timeout=1)
     ser.write(self.reset_counter)
-    ser.close()
+    
     logger.debug('Cleaning reboot counter')
+    ser.close()
+    sleep(2)
     end = self.readCounter()
     if(end==0 and start !=0):
       logger.info("Reboot counter reset test passed")
@@ -175,11 +179,12 @@ async def AsyncModbusTCP(acuClass, Host):
       acuClass.failTest.append('\nModbus TCP Test Fail')
       acuClass.failCount += 1
       logger.error('Error happened when comparing ip address')
-    client.close()
+
   except Exception as e:
     acuClass.failTest.append('\nModbus TCP Test Fail')
     acuClass.failCount += 1
     logger.exception('Unable to connect through Modbus TCP {}'.format(e))
+  client.close()
 
 ##########################################
 async def asyncReadRegisters(client, Address:int, Size:int, Slave:int = 1):
@@ -338,10 +343,10 @@ async def asyncChangeProtocol2(acuClass, Mode=None, lock = None):
     await asyncConnectWrite(acuClass, 4152, [0], '{} Changing channel 2 to Other'.format(acuClass.serialNum))
     await asyncChangeBaudrate2(acuClass,38400)
     await AsyncManualIpWrite(acuClass)
-    sleep(15)
+    sleep(20)
     openBrowser(acuClass, lock)
     await asyncDHCPEnablePowerCycle(acuClass)
-    sleep(15)
+    sleep(20)
     openBrowser(acuClass, lock)
 
   elif(Mode =='PROFIBUS'):
@@ -602,7 +607,7 @@ def pingTest(acuClass,open_browser=False):
 
   try:
       # Use subprocess to run the ping command
-      result = subprocess.run(['ping', '-n', '6', acuClass.address], \
+      result = subprocess.run(['ping', '-n', '5', acuClass.address], \
         capture_output=True, text=True, timeout=5)
       if result.returncode == 0:
           ping_status = "Network Active"
@@ -1010,8 +1015,8 @@ class TestRunner:
   def run_tests(self, shared_failCount, lock):
     self.wrapper()
     logger.info('Process NO. {}, pid {}'.format(self.processNum, os.getpid()))
-    asyncio.run(asyncFlagTest(self))
-  
+    asyncio.run(asyncFlagTest(self))# test connection on different baud rate
+
     #Energy reading remain after power cycle; Max/Min editing range test
     Model = asyncio.run(meterModelScan(self))
     if(Model == 'E'):
@@ -1022,7 +1027,7 @@ class TestRunner:
   
     logger.info('{} DHCP Disabled'.format(self.serialNum))
     asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.63.202 MODBUS ADD:258->0
-    sleep(15)
+    sleep(20)
     openBrowser(self, lock)
 
     logger.info("{} Static Ip Test on protocol 'Others' Finished".format(self.serialNum))
