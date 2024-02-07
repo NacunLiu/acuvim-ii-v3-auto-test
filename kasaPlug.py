@@ -54,7 +54,7 @@ class KasaSmartPlug():
       await self.dev.turn_off()
       await asyncio.sleep(2)
       await self.dev.turn_on()
-      time.sleep(60)
+      time.sleep(90)
     
   async def powerCycleSuperSlow(self):
     await self.dev.update()
