@@ -27,6 +27,8 @@ class Client():
         self.reference_path = dir_path+"\\Reference.png"
         if(not os.path.exists(os.getcwd()+'\\Sc')):
             os.mkdir('Sc')
+        if(not Serial):
+            Serial = 'Test'
         self.test_path = dir_path+"\\Sc\\"+Serial+".png"
         self.ssim_value = None
         self.id = id

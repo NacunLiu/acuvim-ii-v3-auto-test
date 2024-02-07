@@ -189,6 +189,7 @@ async def AsyncModbusTCP(acuClass, Host):
 ##########################################
 async def asyncReadRegisters(client, Address:int, Size:int, Slave:int = 1):
   rr = await client.read_holding_registers(address=Address,count=Size, slave=Slave)
+  await asyncio.sleep(2)
   return rr
 
 # Check if the custom register has default value of 0
@@ -340,7 +341,7 @@ async def asyncChangeBaudrate2(acuClass,newBaudrate):
 async def asyncChangeProtocol2(acuClass, Mode=None, lock = None):
   await asyncio.sleep(5)
   if(Mode=='OTHER'):
-    await asyncConnectWrite(acuClass, 4152, [0], '{} Changing channel 2 to Other'.format(acuClass.serialNum))
+    await asyncConnectWrite(acuClass, 4152, [0], '{} Changing protocol 2 to Other'.format(acuClass.serialNum))
     await asyncChangeBaudrate2(acuClass,38400)
     await AsyncManualIpWrite(acuClass)
     sleep(20)
@@ -350,14 +351,14 @@ async def asyncChangeProtocol2(acuClass, Mode=None, lock = None):
     openBrowser(acuClass, lock)
 
   elif(Mode =='PROFIBUS'):
-    MeterType = await meterModelScan(acuClass)
+    MeterType = meterModelScan(acuClass)
     if(MeterType != 'E'):
       await asyncConnectWrite(acuClass, 65280, [5], '{} Setting Profibus Id-> 5'
                               .format(acuClass.serialNum))
     else:
       logger.info('{} Default Profibus Id-> 2'.format(acuClass.serialNum))
-    await asyncConnectWrite(acuClass, 4152, [5], '{} Changing channel 2 to Profibus'
-                            .format(acuClass.serialNum))
+      await asyncConnectWrite(acuClass, 4152, [5], '{} Changing channel 2 to Profibus'
+                              .format(acuClass.serialNum))
   else:
     await asyncConnectWrite(acuClass, 4152, [4], 'Changing channel 2 to Web 2')
     await asyncChangeBaudrate2(acuClass,11520)
@@ -482,37 +483,36 @@ async def meterMountTypeScan(acuClass):
   await client.connect()
   await asyncio.sleep(1)
   RR = await asyncReadRegisters(client,61553,1)
-  client.close()
   logger.info("{} MeterMountTest started".format(acuClass.serialNum))
+  client.close()
+  await asyncio.sleep(3)
   if(RR.registers[-1] == 0):
     #Set meter to BACnet with id=4
+    await asyncConnectWriteMultipleRegisters(acuClass,[8449,8451,4094],[[38400],[0,4],[2]])
     logger.info("{} is set to BACnet id: 4".format(acuClass.serialNum))
-    await asyncConnectWrite(acuClass,8449,[38400])
-    await asyncConnectWrite(acuClass, 8451, [0,4])
-    await asyncConnectWrite(acuClass,4094,[2])
   else:
+    print('what happened?')
     pass
 
 # This function will read the meter model, will return a leter to indicate meter type
-async def meterModelScan(acuClass) -> str: 
-
+def meterModelScan(acuClass) -> str: 
   MeterFamily = defaultdict(list)
   MeterFamily['A'] = ['CU0', 'CP0', 'CP2', 'CP4', 'CU2'] #Accuenergy model
   MeterFamily['E'] = ['CRD', 'CPG', 'CXD', 'CPD', 'CUG', 'CUD'] #Eaton model
   MeterFamily['D'] = ['CPB', 'CUB']
-  
-  client = AsyncModbusSerialClient(method='rtu', port=acuClass.COM, \
-                                   baudrate=acuClass.BR, parity='N', 
-                            stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
-  await client.connect()
-  await asyncio.sleep(1)
-  RR = await asyncReadRegisters(client,61440,2)
+  client = ModbusSerialClient (method='rtu', port=acuClass.COM, baudrate=acuClass.BR, parity='N', 
+                      stopbits=1,bytesize= 8,timeout=1, unit=1)
+  client.connect()
+  sleep(1)
+  RR = client.read_holding_registers(61440,count=2,slave=1)
+  sleep(1)
+  client.close()
   Model = ''
   for reading in RR.registers:
     ascii_hex = format(int(reading),'02X')
     hex_bytes = bytes.fromhex(ascii_hex)
     Model += hex_bytes.decode('ascii')
-  client.close()
+  
   for key in MeterFamily:
     if(Model[:3] in MeterFamily[key]):
       return(key)
@@ -547,18 +547,55 @@ async def checkEnergyLegacy(acuClass):
   return Energy
 
 ##########################################
+# Purpose: Async Connect and write to MULTIPLE registers
+# recommended asynchronous connect and write through modbus rtu
+async def asyncConnectWriteMultipleRegisters(acuClass, Address: list,\
+  Value: list, prompt:str=None):
+  if(prompt):
+    logger.info(prompt)
+    
+  client = AsyncModbusSerialClient(method='rtu', port=acuClass.COM, baudrate=acuClass.BR, parity='N', 
+                            stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
+  try:
+    await client.connect()
+    await asyncio.sleep(2)
+    logger.info('RTU Connection Status: {}'.format(client.connected)) 
+    for index,address in enumerate(Address):
+      builder = BinaryPayloadBuilder(byteorder=Endian.Big)
+      localAddress = address
+      for node in Value[index]:
+        logger.info('writing {} to {}'.format(node,localAddress))
+        localAddress += 1
+        builder.add_16bit_uint(node)
+      await client.write_registers(address, builder.to_registers(),slave=1)
+      await asyncio.sleep(1)
+    client.close()
+    await asyncio.sleep(2)
+    
+  except Exception as e:
+    logger.warning('Unable to write {}'.format(e))
+    acuClass.failCount += 1
+    acuClass.failTest.append('asyncConnectWrite function failed address: {}'\
+      .format(Address))
+    client.close()
+  await asyncio.sleep(2)
+  return 
+
+
+
+##########################################
 # Purpose: Async Connect and write to register
 # recommended asynchronous connect and write through modbus rtu
 async def asyncConnectWrite(acuClass, Address: int,\
   Value: list, prompt:str=None):
   if(prompt):
     logger.info(prompt)
-  
   client = AsyncModbusSerialClient(method='rtu',port= acuClass.COM,\
                                    baudrate=acuClass.BR, parity='N',\
                                    stopbits=1,bytesize= 8,timeout=1, framer=ModbusRtuFramer)
   try:
     await client.connect()
+    # print('connection status>> {}'.format(client.connected))
     await asyncio.sleep(1)
     logger.debug('RTU Connection Status: {}'.format(client.connected)) 
     address = Address
@@ -570,14 +607,14 @@ async def asyncConnectWrite(acuClass, Address: int,\
       builder.add_16bit_uint(value)
     await client.write_registers(Address, builder.to_registers(),slave=1)
     await asyncio.sleep(1)
-    client.close()  
-    await asyncio.sleep(1)
+    
   except Exception as e:
     logger.warning('Unable to write {}'.format(e))
     acuClass.failCount += 1
     acuClass.failTest.append('asyncConnectWrite function failed address: {}'\
       .format(Address))
-    client.close()  
+  client.close()  
+  await asyncio.sleep(2)
   
 ##########################################
 # Purpose: Asyn write register
@@ -982,7 +1019,7 @@ class TestRunner:
     asyncio.run(asyncChangeProtocol2(self,'OTHER', lock))
     #After webpush test, 
     asyncio.run(asyncChangeProtocol2(self,'PROFIBUS')) #change channel 2 to profibus
-    logger.info('Protocol 1 is now set to BACnet, id of 3')
+    
     asyncio.run(meterMountTypeScan(self)) #change channel 1 to BACnet
     with OpenYabeLock:
       BACnetConnectionTest(self)  
@@ -1016,9 +1053,8 @@ class TestRunner:
     self.wrapper()
     logger.info('Process NO. {}, pid {}'.format(self.processNum, os.getpid()))
     asyncio.run(asyncFlagTest(self))# test connection on different baud rate
-
     #Energy reading remain after power cycle; Max/Min editing range test
-    Model = asyncio.run(meterModelScan(self))
+    Model = meterModelScan(self)
     if(Model == 'E'):
       asyncio.run(energyLegitCheck(self,1,0,True,Model)) 
     else:
@@ -1135,7 +1171,7 @@ if __name__ == '__main__':
     runtime = end_time - start_time
     global_error = shared_failCount.value #store total error count for both phase1 and phase2 test
     if(shared_failCount.value == 0):
-      print(p1Passed)
+      # print(p1Passed)
       run('ections test finished successfully, total runtime of {}m{}s'\
         .format(int(runtime//60),int(runtime%60)))
       pass
