@@ -424,7 +424,7 @@ async def asyncFlagChecking(acuClass, resetEnable: bool):
     await asyncio.sleep(1)
     RR = await asyncReadRegisters(client,38146,1)
     latency = RR.registers[-1]
-    logger.debug('Latency Register Reading: {}'.format(latency))  
+    logger.info('Latency Register Reading: {}'.format(latency))  
   client.close()
   await asyncio.sleep(1)
   
