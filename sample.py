@@ -2,7 +2,13 @@ from time import sleep
 from pymodbus.client import ModbusTcpClient
 from collections import defaultdict
 
-kSleepTime = 5
+####################################################
+# instructions:
+# Set the CT1 to 500A, ct ratio of 100:1
+# Set the PT1 to 4000 V, pt ratio of 10:1
+# This config will yield total energy 1000x
+
+kSleepTime = 20
 kWaitTime = 10
 
 class touTest():
@@ -10,6 +16,7 @@ class touTest():
   def __init__(self,Host):
     self.TariffReadingRange = {0:29184 ,1:29194, 2: 29204, 3: 29214}
     self.tou = defaultdict(float)
+    self.failCount = 0
     Tariff = ["Sharp","Peak","Valley","Normal"]
     Parameters = ["Ep_imp","Ep_exp","Eq_imp","Eq_exp","Es"]
     for tariffName in Tariff:
@@ -84,7 +91,7 @@ class touTest():
         return energy
     return rr.registers[-1]
 
-
+# configure TOU settings
   def touConfig(self):    
     for scheduleId in self.Schedule: #SCHEDULES
       self.syncConnectWrite(scheduleId,self.Schedule[scheduleId])
@@ -112,27 +119,29 @@ class touTest():
     else:
         return True
     
-  def checkTouEnergy(self,TariffIndex:int,sleeptime:int):
+  def checkTouEnergy(self,TariffIndex:int,sleepTime:int):
     #print(TariffIndex)
     start_address = self.TariffReadingRange[TariffIndex]+8
     start_reading = self.syncConnectRead(start_address,2)
-    sleep(kWaitTime)
+    sleep(sleepTime)
     end_reading = self.syncConnectRead(start_address,2)
     energyAccumulated = (end_reading-start_reading)/10 
-    expectedEnergy = 60*energyAccumulated*(60/kWaitTime)
-    if(abs(expectedEnergy-18000))>100:
+    expectedEnergy = 60*energyAccumulated*(60/sleepTime)
+    if(abs(expectedEnergy-1800))>100:
         print('Register reading incorrect!')
+        self.failCount += 1
     else:
-        print('Passed: {} Ref:{}'.format(expectedEnergy,18000))
-        
+        print('Passed: {} Ref:{}'.format(expectedEnergy,1800))
+    
+    # 10 IS BECAUSE 1800 kWh / (60 minutes * (60/sleepTime)
     if(TariffIndex==0):
-        print('Sharp Apparent Energy Accumulated: {} kVA Ref:{}'.format(energyAccumulated,18000))
+        print('Sharp Apparent Energy Accumulated: {} kWh Ref:{} kWh'.format(energyAccumulated,10))
     elif(TariffIndex==1):
-        print('Peak Apparent Energy Accumulated: {} kVA'.format(energyAccumulated))
+        print('Peak Apparent Energy Accumulated: {} kWh Ref:{} kWh'.format(energyAccumulated,10))
     elif(TariffIndex==2):
-        print('Valley Apparent Energy Accumulated: {} kVA'.format(energyAccumulated))
+        print('Valley Apparent Energy Accumulated: {} kWh Ref:{} kWh'.format(energyAccumulated,10))
     elif(TariffIndex==3):
-        print('Normal Apparent Energy Accumulated: {} kVA'.format(energyAccumulated))
+        print('Normal Apparent Energy Accumulated: {} kWh Ref:{} kWh'.format(energyAccumulated,10))
   
   def writeSingleDayClock(self,date):
     print('On date ',date)
@@ -197,15 +206,16 @@ class touTest():
     if(self.failCount==0):
       return True
     else:
+      print('{} of test point fails'.format(self.failCount))
       return False
         
-        
+# tou test main method
   def touTestMain(self):
     self.touConfig()
     self.smartClock()
 
 if __name__ == '__main__':
-    tou_Test = touTest("192.168.60.110")
+    tou_Test = touTest("192.168.63.224")
     #touTest.setTouSeasonHoliday()
     print(tou_Test.touConfig())
     tou_Test.touTestMain()
