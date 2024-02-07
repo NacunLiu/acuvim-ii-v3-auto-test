@@ -271,15 +271,14 @@ async def asyncConnectIp(acuClass):
   
 
 ################################################################################
-# Purpose: Modify IP address and disabled DHCP  /preset address: 192.168.63.202/or 63.201
-# * subject to change if 
-async def AsyncManualIpWrite(acuClass,Address=259,Value=[49320,16330]):
+# Purpose: Modify IP address and disabled DHCP  /preset address: 192.168.61.42/or 61.43
+async def AsyncManualIpWrite(acuClass,Address=259,Value=[49320,15658]):
   logger.info('{} Manual DHCP Test in process.....'.format(acuClass.serialNum))
   await asyncConnectWrite(acuClass, 258, [0],'Disabling DHCP....') #set to DHCP Disabled
   if(acuClass.processNum ==1):
     await asyncConnectWrite(acuClass, Address, Value)
   elif(acuClass.processNum == 2):
-    await asyncConnectWrite(acuClass, Address, [49320,16329]) #192.168.63.201
+    await asyncConnectWrite(acuClass, Address, [49320,15659]) #192.168.63.201
   await acuClass.plug.powerCycleSlow()
   await asyncConnectIp(acuClass)
   #REQUIRE POWERCYCLE
@@ -1062,7 +1061,7 @@ class TestRunner:
         asyncio.run(energyLegitCheck(self,1,i,True,Model))   
   
     logger.info('{} DHCP Disabled'.format(self.serialNum))
-    asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.63.202 MODBUS ADD:258->0
+    asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.61.42 MODBUS ADD:258->0
     sleep(20)
     openBrowser(self, lock)
 
@@ -1076,7 +1075,7 @@ class TestRunner:
   
     #web2 fixed ip
     logger.info('{} DHCP disable'.format(self.serialNum))
-    asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.63.202/201 MODBUS ADD:258->0
+    asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.61.42/43 MODBUS ADD:258->0
     openBrowser(self, lock)    
 
     #web 2 dhcp
