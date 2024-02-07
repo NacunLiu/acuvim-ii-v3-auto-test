@@ -278,7 +278,7 @@ async def AsyncManualIpWrite(acuClass,Address=259,Value=[49320,15658]):
   if(acuClass.processNum ==1):
     await asyncConnectWrite(acuClass, Address, Value)
   elif(acuClass.processNum == 2):
-    await asyncConnectWrite(acuClass, Address, [49320,15659]) #192.168.63.201
+    await asyncConnectWrite(acuClass, Address, [49320,15659]) #192.168.61.43
   await acuClass.plug.powerCycleSlow()
   await asyncConnectIp(acuClass)
   #REQUIRE POWERCYCLE
@@ -414,7 +414,7 @@ async def asyncFlagChecking(acuClass, resetEnable: bool):
       await asyncio.sleep(1)
       RR = await asyncReadRegisters(client,38146,1)
       latency = RR.registers[-1]
-      logger.debug('Latency Register Reading: {}'.format(latency))
+      logger.info('Latency Register Reading: {}'.format(latency))
     except asyncio.exceptions.CancelledError as e:
       logger.warning('Flag check ERROR')
       
