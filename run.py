@@ -343,10 +343,10 @@ async def asyncChangeProtocol2(acuClass, Mode=None, lock = None):
     await asyncConnectWrite(acuClass, 4152, [0], '{} Changing protocol 2 to Other'.format(acuClass.serialNum))
     await asyncChangeBaudrate2(acuClass,38400)
     await AsyncManualIpWrite(acuClass)
-    sleep(20)
+    sleep(30)
     openBrowser(acuClass, lock)
     await asyncDHCPEnablePowerCycle(acuClass)
-    sleep(20)
+    sleep(30)
     openBrowser(acuClass, lock)
 
   elif(Mode =='PROFIBUS'):
@@ -1062,7 +1062,7 @@ class TestRunner:
   
     logger.info('{} DHCP Disabled'.format(self.serialNum))
     asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.61.42 MODBUS ADD:258->0
-    sleep(20)
+    sleep(30)
     openBrowser(self, lock)
 
     logger.info("{} Static Ip Test on protocol 'Others' Finished".format(self.serialNum))
@@ -1076,6 +1076,7 @@ class TestRunner:
     #web2 fixed ip
     logger.info('{} DHCP disable'.format(self.serialNum))
     asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.61.42/43 MODBUS ADD:258->0
+    sleep(30)
     openBrowser(self, lock)    
 
     #web 2 dhcp
