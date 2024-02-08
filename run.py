@@ -356,8 +356,9 @@ async def asyncChangeProtocol2(acuClass, Mode=None, lock = None):
                               .format(acuClass.serialNum))
     else:
       logger.info('{} Default Profibus Id-> 2'.format(acuClass.serialNum))
-      await asyncConnectWrite(acuClass, 4152, [5], '{} Changing channel 2 to Profibus'
-                              .format(acuClass.serialNum))
+      
+    await asyncConnectWrite(acuClass, 4152, [5], '{} Changing channel 2 to Profibus'
+                            .format(acuClass.serialNum))
   else:
     await asyncConnectWrite(acuClass, 4152, [4], 'Changing channel 2 to Web 2')
     await asyncChangeBaudrate2(acuClass,11520)
