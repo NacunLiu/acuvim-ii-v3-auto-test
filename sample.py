@@ -1,7 +1,12 @@
 from time import sleep
 from pymodbus.client import ModbusTcpClient
 from collections import defaultdict
+import logging, coloredlogs
+import pyfiglet
 
+text = pyfiglet.figlet_format("AcuTest TOU", font="slant",width=200)
+logger = logging.getLogger(__name__)
+coloredlogs.install(level='INFO', logger=logger, fmt='%(asctime)s %(hostname)s %(levelname)s %(message)s')
 ####################################################
 # instructions:
 # Set the CT1 to 500A, ct ratio of 100:1
@@ -9,11 +14,18 @@ from collections import defaultdict
 # This config will yield total energy 1000x
 
 kSleepTime = 20
-kWaitTime = 10
+kWaitTime = 4
 
 class touTest():
   #ramdom ModbusTcpClient datetime
   def __init__(self,Host):
+    self.Host = Host
+    self.serialNum = self.readSerial()
+    
+    logFileName = self.serialNum+'.log'
+    self.logFile = logging.FileHandler(logFileName,mode='w')
+    self.logFile.setLevel(logging.DEBUG)
+    logger.addHandler(self.logFile)
     self.TariffReadingRange = {0:29184 ,1:29194, 2: 29204, 3: 29214}
     self.tou = defaultdict(float)
     self.failCount = 0
@@ -24,7 +36,7 @@ class touTest():
         self.tou[tariffName+'_'+parameters] = 0
     
     self.HolidayStart = 31376
-    self.Host = Host
+    
     self.Season = {30752:[1,1,1],30755:[2,1,2],30758:[3,1,3],30761:[4,1,4],30764:[5,1,5],30767:[6,1,6],30770:[7,1,7],30773:[8,1,8],30776:[9,1,9],30779:[10,1,10],30782:[11,1,11],30785:[12,1,12]}
     self.Schedule = {30788:[9,0,0],30791:[15,0,1],\
                     30830:[9,0,0],30833:[15,0,1],\
@@ -65,12 +77,30 @@ class touTest():
         [7, 11, 14], [7, 23, 14], [7, 28, 14], [8, 1, 14], [8, 2, 14], [8, 7, 14],\
           [8, 20, 14], [9, 20, 14], [10, 4, 14], [10, 5, 14], [10, 6, 14],  [10, 22, 14], [10, 24, 14],\
             [11, 10, 14], [11, 19, 14], [11, 22, 14], [12, 2, 14], [12, 10, 14], [12, 20, 14], [12, 27, 14]]
+    logger.info('\n{}'.format(text))
+  
+  def readSerial(self):
+    client = ModbusTcpClient(host = self.Host)
+    client.connect()
+    try:
+      SR = client.read_holding_registers(61504,6, 1)
+      SerialNumber = ''
+      for reading in SR.registers:
+        ascii_hex = format(int(reading),'02X')
+        
+        hex_bytes = bytes.fromhex(ascii_hex)
+        SerialNumber += hex_bytes.decode('ascii')
+        client.close()
+      return SerialNumber[:-1]
+    except Exception as e:
+      self.logger.error(e)
+      return 'touTest'
   
   def syncConnectWrite(self,Address,Value, promptEnable=False):
     client = ModbusTcpClient(host = self.Host)
     client.connect()
     if(promptEnable):
-      print('Sync Connection Status: {}'.format(client.connected))
+      logger.info('Sync Connection Status: {}'.format(client.connected))
     client.write_registers(Address,Value,slave=1)
     client.close()
     
@@ -78,7 +108,7 @@ class touTest():
     client = ModbusTcpClient(host = self.Host)
     try:
         client.connect()
-        #print('Sync Connection Status: {}'.format(client.connected))
+        #logger.info('Sync Connection Status: {}'.format(client.connected))
         assert client.connected
     except AssertionError:
         return -1
@@ -86,7 +116,7 @@ class touTest():
     client.close()
     if(len(rr.registers)==2):
         rrlow = format(int(rr.registers[-1]),'02X')
-        rrhigh =format(int(rr.registers[0]),'02X') #cast to fixed length 0xAB
+        rrhigh = format(int(rr.registers[0]),'02X') #cast to fixed length 0xAB
         energy = int(rrhigh+rrlow,16)
         return energy
     return rr.registers[-1]
@@ -109,8 +139,7 @@ class touTest():
       holiday_start += 3 #next header
     
     self.seasonList = sorted(self.seasonList)
-    print('Holiday date',len(self.specialDate),self.specialDate,'\n',\
-    'Season date:',len(self.seasonList), self.seasonList)
+    logger.info('Holiday no. {}\nDates: {}\nSeason no.{}\nSeason Dates {}\n'.format(len(self.specialDate),self.specialDate,len(self.seasonList), self.seasonList))
     self.syncConnectWrite(30726,[30]) # 30 holidays
     self.syncConnectWrite(30727,[1]) # enable TOU
     
@@ -120,7 +149,7 @@ class touTest():
         return True
     
   def checkTouEnergy(self,TariffIndex:int,sleepTime:int):
-    #print(TariffIndex)
+    #logger.info(TariffIndex)
     start_address = self.TariffReadingRange[TariffIndex]+8
     start_reading = self.syncConnectRead(start_address,2)
     sleep(sleepTime)
@@ -128,27 +157,27 @@ class touTest():
     energyAccumulated = (end_reading-start_reading)/10 
     expectedEnergy = 60*energyAccumulated*(60/sleepTime)
     if(abs(expectedEnergy-1800))>100:
-        print('Register reading incorrect!')
+        logger.error('Register reading incorrect! reading: {}'.format(expectedEnergy))
         self.failCount += 1
     else:
-        print('Passed: {} Ref:{}'.format(expectedEnergy,1800))
+        logger.info('Passed: {} Ref:{}'.format(expectedEnergy,1800))
     
     # 10 IS BECAUSE 1800 kWh / (60 minutes * (60/sleepTime)
     if(TariffIndex==0):
-        print('Sharp Apparent Energy Accumulated: {} kWh Ref:{} kWh'.format(energyAccumulated,10))
+        logger.info('Sharp Apparent Energy Accumulated: {} kWh Ref:{} kWh'.format(energyAccumulated,10))
     elif(TariffIndex==1):
-        print('Peak Apparent Energy Accumulated: {} kWh Ref:{} kWh'.format(energyAccumulated,10))
+        logger.info('Peak Apparent Energy Accumulated: {} kWh Ref:{} kWh'.format(energyAccumulated,10))
     elif(TariffIndex==2):
-        print('Valley Apparent Energy Accumulated: {} kWh Ref:{} kWh'.format(energyAccumulated,10))
+        logger.info('Valley Apparent Energy Accumulated: {} kWh Ref:{} kWh'.format(energyAccumulated,10))
     elif(TariffIndex==3):
-        print('Normal Apparent Energy Accumulated: {} kWh Ref:{} kWh'.format(energyAccumulated,10))
+        logger.info('Normal Apparent Energy Accumulated: {} kWh Ref:{} kWh'.format(energyAccumulated,10))
   
   def writeSingleDayClock(self,date):
-    print('On date ',date)
+    logger.info('On date {}'.format(date))
     thisTime = date
     thisSchedule = thisTime[-1] # desired schedule
     thisDetailSchedule = self.Schedule2Tariff[thisSchedule] # (hr,min,tariff,hr2,min2,tariff2)
-    #print(thisDetailSchedule)
+    #logger.info(thisDetailSchedule)
     currDate = [2023]+[thisTime[0]]+[thisTime[1]]+[0,0,0] # year, month, day, [hr, min, sec]
                                                             # 0      1      2     3   4    5
     sleepTime = kSleepTime
@@ -166,12 +195,13 @@ class touTest():
     self.syncConnectWrite(4160,currDate) # update meter clock 
     self.checkTouEnergy(TariffIndex,sleepTime)
     sleep(kSleepTime)
-
+    logger.info('\n')
+    
     #Depend on presentDate, this function will set the meter's clock to the desired date, starting from 
   def smartClock(self,presentDate=None):
     if(not presentDate): #check whole year's schedule
       while(self.seasonList and self.specialDate):
-          print('Season List ',self.seasonList[0][:-1],'Holiday List',self.specialDate[0][:-1])
+          logger.info('next available date: Season: {} Holiday: {}'.format(self.seasonList[0][:-1],self.specialDate[0][:-1]))
           if(self.seasonList[0][:-1] < self.specialDate[0][:-1]):
               # this date is a regular schedule
               thisTime = self.seasonList[0]
@@ -201,12 +231,16 @@ class touTest():
           self.writeSingleDayClock(thisTime)
                 
     else: #provide a specific date
-        print(presentDate)
+        logger.info(presentDate)
         self.writeSingleDayClock(presentDate)
+        
     if(self.failCount==0):
+      logger.info('tou test passed')
+      self.logFile.close()
       return True
     else:
-      print('{} of test point fails'.format(self.failCount))
+      logger.error('{} of test point fails'.format(self.failCount))
+      self.logFile.close()
       return False
         
 # tou test main method
@@ -215,7 +249,7 @@ class touTest():
     self.smartClock()
 
 if __name__ == '__main__':
-    tou_Test = touTest("192.168.63.224")
+    tou_Test = touTest("192.168.60.81")
     #touTest.setTouSeasonHoliday()
-    print(tou_Test.touConfig())
+    # logger.info(tou_Test.touConfig())
     tou_Test.touTestMain()
