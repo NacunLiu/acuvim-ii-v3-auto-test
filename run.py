@@ -428,7 +428,7 @@ async def asyncFlagChecking(acuClass, resetEnable: bool):
   client.close()
   await asyncio.sleep(1)
   
-  if(latency>160):
+  if(latency>120):
     logger.warning("Alert! {} Latency is higher than {}".format(acuClass.serialNum, latency))
     acuClass.failCount += 1
     acuClass.failTest.append("Meter {} latency reaches {}".format(acuClass.serialNum, latency))
