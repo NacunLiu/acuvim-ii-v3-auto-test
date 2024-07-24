@@ -1,6 +1,3 @@
-# File: easySwitch.py
-# Author: Hongjian Zhu
-# Date: 2023
 # Description: see below
 
 """

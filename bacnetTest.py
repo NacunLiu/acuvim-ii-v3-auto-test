@@ -1,7 +1,5 @@
-# File: bacnetTest.py
-# Author: Hongjian Zhu
-# Date: Nov 14, 2023
 # Description: This script is primarily designed to automate the BACnet connection tests, for Acuvim II v3.
+# last updated by Nacun Liu 2024-05-02
 
 import subprocess
 from time import sleep

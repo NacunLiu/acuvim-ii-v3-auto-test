@@ -296,18 +296,18 @@ async def asyncManualEnergyWrite(acuClass, Address, Values:list, Reset):
 async def AsyncManualEnergyWriteLegacy(acuClass):
     logger.debug('Generating manual Energy in progress...')
     #Ep_imp, Ep_exp, Eq, Es, etc
-    await asyncConnectWrite(acuClass,16456,[20,31679,0,21347,0,20528,1,57872,20,
-                                            53026,20,10332,2,12865,65534,28193,21,62748])
+    await asyncConnectWrite(acuClass,16456,[3167,20,2134,0,2052,0,5787,1,5302,
+                                          20,1033,20,1286,2,6553,2,2819,21])
     #Es_imp, Esa, Esb, phase-wise energy
-    await asyncConnectWrite(acuClass,18688,[21,62748,7,18954,7,21871,7,21992,0,0,0,0,0,0,0,0])
+    await asyncConnectWrite(acuClass,18688,[6274,21,1894,1,2718,21,2192,7,0,0,0,0,0,0,0,0])
     #Epa, Epb, phase-wise energy
-    await asyncConnectWrite(acuClass,17952,[6,47101,0,6775,6,52223,0,12060,6,63425,0,
-                                            2511,0,3200,0,49436,0,11760,0,35876,0,5567,
-                                            0,38094,7,18954,7,21871,7,21922])
+    await asyncConnectWrite(acuClass,17952,[6,47,0,677,655,522,0,120,6,634,0,
+                                          251,0,32,4936,49,0,117,3567,0,5667,0,
+                                          384,38,1894,1,2187,2,2192,21])
     #four-quad energy q
-    await asyncConnectWrite(acuClass, 18704, [3, 61059, 0, 835, 0, 1430, 0, 4828, 0, 35539,
-                                              0, 2365, 0, 10330, 0, 739, 0, 10944, 0, 13722,
-                                              0, 860, 0, 3081, 3, 39377, 0, 35713, 0, 35016, 0, 35013])
+    await asyncConnectWrite(acuClass,18704,[3,610,0,83,0,143,0,48,0,339,
+                                          0,23,0,103,0,73,0,109,0,137,
+                                          0,86,0,308,3,39,0,35,0,35,0,35])
 #four-quad energy p <this part is commented out as meter has problem dealing with Q4 energy
 #await asyncConnectWrite(Baudrate,Port,8328,[10,20497,0,23390,0,10333,8,28337,0,0,0,0,0,0,0,0,0,340,0,0,0,0,0,0,5,16296,0,0,5,12897,5,12897,14,45059,0,48296,0,17519,10,1549])
 #await asyncio.sleep(60) #wait until context is stored
@@ -695,7 +695,7 @@ async def energyLegitCheck(acuClass, SequenceId,Display,Control,MeterModel):
   
   if(SequenceId == 1): 
     start_address = 16456
-    contents = [15258,51711]*9
+    contents = [15,11]*9
     await asyncManualEnergyWrite(acuClass, start_address, contents,True)
     await isMemorySectionEmpty(acuClass,start_address)
     if(await ReadingComparator(acuClass,contents,start_address,len(contents))):
@@ -713,7 +713,7 @@ async def energyLegitCheck(acuClass, SequenceId,Display,Control,MeterModel):
       
   elif(SequenceId == 2): #Energy (1S)
     start_address = 16456
-    contents = [15258,51711]*5+[50277,13825]+[15258,51711]+[50277,13825]+[15258,51711]
+    contents = [15,11]*5+[15,11]+[15,11]+[15,11]+[15,11]
     await asyncManualEnergyWrite(acuClass, start_address, contents,True)
     await isMemorySectionEmpty(acuClass,start_address)
     if(await ReadingComparator(acuClass,contents,start_address,len(contents))):
@@ -730,7 +730,7 @@ async def energyLegitCheck(acuClass, SequenceId,Display,Control,MeterModel):
       
   elif(SequenceId == 3): # Energy -continue (1S)
     start_address = 17952
-    contents = [15258,51711]*15
+    contents = [15,11]*15
     await asyncManualEnergyWrite(acuClass, start_address, contents,True)
     await isMemorySectionEmpty(acuClass, start_address)
     if(await ReadingComparator(acuClass,contents,start_address,len(contents))):
@@ -747,7 +747,7 @@ async def energyLegitCheck(acuClass, SequenceId,Display,Control,MeterModel):
       
   elif(SequenceId == 4): #Import/Export Apparent Energy
     start_address = 18688
-    contents = [15258,51711]*8
+    contents = [15,11]*8
     await asyncManualEnergyWrite(acuClass, start_address, contents,True)
     await isMemorySectionEmpty(acuClass, start_address)
     if(await ReadingComparator(acuClass,contents,start_address,len(contents))):
@@ -764,7 +764,7 @@ async def energyLegitCheck(acuClass, SequenceId,Display,Control,MeterModel):
       
   elif(SequenceId == 5): #Four-quadrant reactive energy
     start_address = 18704
-    contents = [15258,51711]*16
+    contents = [15,11]*16
     await asyncManualEnergyWrite(acuClass, start_address, contents,True)
     await isMemorySectionEmpty(acuClass, start_address)
     # await plug.powerCycleEnergy()
@@ -792,7 +792,7 @@ async def energyLegitCheck(acuClass, SequenceId,Display,Control,MeterModel):
   
   elif(SequenceId == 7): #Independent Input Channel Energy
     start_address = 9472
-    contents = [15258,51711]*32
+    contents = [15,11]*32
     await asyncManualEnergyWrite(acuClass, start_address, contents,True)
     await isMemorySectionEmpty(acuClass, start_address)
     if(await ReadingComparator(acuClass,contents,start_address,len(contents))):
@@ -808,7 +808,7 @@ async def energyLegitCheck(acuClass, SequenceId,Display,Control,MeterModel):
       
   elif(SequenceId == 8): #Independent Input Channel Energy - Continued
     start_address = 9472
-    contents = [15258,51711]*14+([50277,13825]+[15258,51711]*3)*2+[15258,51711]*12
+    contents = [15,11]*14+([50277,13825]+[15258,51711]*3)*2+[15258,51711]*12
     await asyncManualEnergyWrite(acuClass, start_address, contents,True)
     await isMemorySectionEmpty(acuClass, start_address)
     if(await ReadingComparator(acuClass,contents,start_address,len(contents))):
@@ -870,9 +870,9 @@ async def EnergyMemoryRetention(acuClass, WaitControl):
   await AsyncManualEnergyWriteLegacy(acuClass)
   Energy = await checkEnergyLegacy(acuClass)
   try:
-    assert Energy == [20,31679,0,21347,0,20528,1,57872,20,53026,20,10332,2,12865,65534,28193,21,62748,21,62748,7,18954,7,21871,7,21992,0,0,0,0,0,0,0,0,6,47101,0,6775,6,52223,0,12060,
-                        6,63425,0,2511,0,3200,0,49436,0,11760,0,35876,0,5567,0,38094,7,18954,7,21871,7,21922]
-   
+    assert Energy == [3167, 20, 2134, 0, 2052, 0, 5787, 1, 5302, 20, 1033, 20, 1286, 2, 6553, 2, 2819, 21, 6274, 21, 1894, 1, 
+    2718, 21, 2192, 7, 0, 0, 0, 0, 0, 0, 0, 0, 6, 47, 0, 677, 655, 522, 0, 120, 6, 634, 0, 251, 0, 32, 4936, 49, 0, 117, 3567, 0, 
+    5667, 0, 384, 38, 1894, 1, 2187, 2, 2192, 21]
   except AssertionError:
     acuClass.failCount += 1
     acuClass.failTest.append('\nEnergy memory retention test 1 fails')
@@ -881,11 +881,11 @@ async def EnergyMemoryRetention(acuClass, WaitControl):
   await acuClass.plug.powerCycleSuperSlow()
   Energy = await checkEnergyLegacy(acuClass)
   try:
-    assert Energy == [20,31679,0,21347,0,20528,1,57872,20,53026,20,10332,2,\
-                      12865,65534,28193,21,62748,21,62748,7,18954,7,21871,
-                      7,21992,0,0,0,0,0,0,0,0,6,47101,0,6775,6,52223,0,12060,\
-                        6,63425,0,2511,0,3200,0,49436,0,11760,0,35876,
-                      0,5567,0,38094,7,18954,7,21871,7,21922]
+    assert Energy == [3167, 20, 2134, 0, 2052, 0, 5787, 1, 5302, 20, 1033, 20, 1286, 2, 6553, 2, 
+    2819, 21, 6274, 21, 1894, 1, 2718, 21, 2192, 7, 0, 0, 0, 0, 0, 0, 0, 0, 6, 47, 0, 677, 655, 522, 0, 120, 6, 634, 0, 251, 0, 32, 
+    4936, 49, 0, 117, 3567, 0, 5667, 0, 384, 38, 1894, 1, 2187, 2, 2192, 21]
+    logger.info('{} Memory retention test passed'.format(acuClass.serialNum))
+    
   except AssertionError:
     acuClass.failCount += 1
     acuClass.failTest.append('\nEnergy memory retention test 2 fails')

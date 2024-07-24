@@ -1,7 +1,5 @@
-# File: push.py
-# Author: Hongjian Zhu
-# Date: Oct 2, 2023
 # Description: see below
+# last updated by Nacun Liu 2024-06-06
 
 """
 This feature provides option for hardworking test engineer to receive test result through email/text message 

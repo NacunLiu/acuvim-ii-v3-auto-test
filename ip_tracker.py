@@ -1,8 +1,4 @@
-# File: ip_tracker.py
-# Author: Hongjian Zhu
-# Date: August 13, 2023
-# Last Edit Date: Sept 18, 2023
-# Description: see below
+
 """
 This function will scan all Ips from router, return the target ip matched by Mac Address
 

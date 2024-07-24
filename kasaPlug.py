@@ -1,7 +1,5 @@
-# File: kasaPlug.py
-# Author: Hongjian Zhu
-# Date: August 15, 2023
 # Description: see below
+# last updated by Nacun Liu 2024-04-03
 
 """
 KasaSmartPlug Class

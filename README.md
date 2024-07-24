@@ -5,9 +5,6 @@
  / ___ / /__/ /_/ // / /  __(__  ) /_   / /_/ / /_/ /
 /_/  |_\___/\__,_//_/  \___/____/\__/   \____/\____/
 ```
-Author: Hongjian
-
-Date: 01/2024
 
 Prerequisite: Python3.8 or higher installed
               To enable BACnet Test, please download [YABE](https://sourceforge.net/projects/yetanotherbacnetexplorer/)

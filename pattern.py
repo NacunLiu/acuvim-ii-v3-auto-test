@@ -1,7 +1,5 @@
-# File: pattern.py
-# Author: Hongjian Zhu
-# Date: August 13, 2023
 # Description: see below
+#last updated by Nacun Liu 2024-04-07
 """
 Display test result
 """
