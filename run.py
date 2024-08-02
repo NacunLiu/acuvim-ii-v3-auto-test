@@ -495,7 +495,7 @@ async def meterMountTypeScan(acuClass):
 def meterModelScan(acuClass) -> str: 
   MeterFamily = defaultdict(list)
   MeterFamily['A'] = ['CU0', 'CP0', 'CP2', 'CP4', 'CU2'] #Accuenergy model
-  MeterFamily['E'] = ['CRD', 'CPG', 'CXD', 'CPD', 'CUG', 'CUD', 'CPE'] #Eaton model
+  MeterFamily['E'] = ['CRD', 'CPG', 'CXD', 'CPD', 'CUG', 'CUD', 'CPE', 'CPH'] #Eaton model
   MeterFamily['D'] = ['CPB', 'CUB']
   client = ModbusSerialClient (method='rtu', port=acuClass.COM, baudrate=acuClass.BR, parity='N', 
                       stopbits=1,bytesize= 8,timeout=1, unit=1)
@@ -647,7 +647,7 @@ def pingTest(acuClass,open_browser=False):
           ping_status = "Network Active"
           if open_browser:
               webbrowser.open(acuClass.address)
-              sleep(15)
+              sleep(30)
               result = subprocess.run("taskkill /f /im msedge.exe"\
                                       , stdout=subprocess.PIPE, stderr=subprocess.PIPE)
       else:
@@ -1059,7 +1059,7 @@ class TestRunner:
   
     logger.info('{} DHCP Disabled'.format(self.serialNum))
     asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.61.42 MODBUS ADD:258->0
-    sleep(30)
+    sleep(60)
     openBrowser(self, lock)
 
     logger.info("{} Static Ip Test on protocol 'Others' Finished".format(self.serialNum))
@@ -1073,7 +1073,7 @@ class TestRunner:
     #web2 fixed ip
     logger.info('{} DHCP disable'.format(self.serialNum))
     asyncio.run(AsyncManualIpWrite(self)) #set manual ip to 192.168.61.42/43 MODBUS ADD:258->0
-    sleep(30)
+    sleep(60)
     openBrowser(self, lock)    
 
     #web 2 dhcp
