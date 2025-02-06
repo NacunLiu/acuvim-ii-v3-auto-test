@@ -309,7 +309,7 @@ async def AsyncManualEnergyWriteLegacy(acuClass):
     logger.debug('Generating manual Energy in progress...')
     # Ep_imp, Ep_exp, Eq, Es, etc
     await asyncConnectWrite(acuClass, 16456, [20, 31679, 0, 21347, 0, 20528, 1, 57872, 20,
-                                              53026, 20, 10332, 2, 12865, 65534, 28193, 21, 62748])
+                                              53026, 20, 10332, 2, 12865, 21, 62748, 21, 62748])
     # Es_imp, Esa, Esb, phase-wise energy
     await asyncConnectWrite(acuClass, 18688, [21, 62748, 7, 18954, 7, 21871, 7, 21992, 0, 0, 0, 0, 0, 0, 0, 0])
     # Epa, Epb, phase-wise energy
@@ -901,11 +901,12 @@ async def EnergyMemoryRetention(acuClass, WaitControl):
     await AsyncManualEnergyWriteLegacy(acuClass)
     Energy = await checkEnergyLegacy(acuClass)
     try:
-        assert Energy == [20, 31679, 0, 21347, 0, 20528, 1, 57872, 20, 53026, 20, 10332, 2, 12865, 65534, 28193, 21,
+        assert Energy == [20, 31679, 0, 21347, 0, 20528, 1, 57872, 20, 53026, 20, 10332, 2, 12865, 21, 62748, 21,
                           62748, 21, 62748, 7, 18954, 7, 21871, 7, 21992, 0, 0, 0, 0, 0, 0, 0, 0, 6, 47101, 0, 6775, 6,
                           52223, 0, 12060,
                           6, 63425, 0, 2511, 0, 3200, 0, 49436, 0, 11760, 0, 35876, 0, 5567, 0, 38094, 7, 18954, 7,
                           21871, 7, 21922]
+        print(f'After reboot, read the energy result is : {Energy}')
 
     except AssertionError:
         acuClass.failCount += 1
@@ -916,7 +917,7 @@ async def EnergyMemoryRetention(acuClass, WaitControl):
     Energy = await checkEnergyLegacy(acuClass)
     try:
         assert Energy == [20, 31679, 0, 21347, 0, 20528, 1, 57872, 20, 53026, 20, 10332, 2, \
-                          12865, 65534, 28193, 21, 62748, 21, 62748, 7, 18954, 7, 21871,
+                          12865, 21, 62748, 21, 62748, 21, 62748, 7, 18954, 7, 21871,
                           7, 21992, 0, 0, 0, 0, 0, 0, 0, 0, 6, 47101, 0, 6775, 6, 52223, 0, 12060, \
                           6, 63425, 0, 2511, 0, 3200, 0, 49436, 0, 11760, 0, 35876,
                           0, 5567, 0, 38094, 7, 18954, 7, 21871, 7, 21922]
